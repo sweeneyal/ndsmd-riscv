@@ -17,6 +17,7 @@ library ieee;
 
 package InstructionUtility is
     
+    -- This and the supporting functions slices the instruction into the basic blocks of bits
     type instruction_t is record
         opcode : std_logic_vector(6 downto 0);
         rs1    : std_logic_vector(4 downto 0);
@@ -65,6 +66,25 @@ package InstructionUtility is
     constant cDivuFunct3   : std_logic_vector(2 downto 0) := "101";
     constant cRemFunct3    : std_logic_vector(2 downto 0) := "110";
     constant cRemuFunct3   : std_logic_vector(2 downto 0) := "111";
+
+    -- This applies a second layer of decoding, allowing more elaborate decoration
+    -- of the instruction, e.g. indicating the functional unit type it uses, the particular
+    -- operation it performs, etc.
+    type functional_unit_t is (ALU, FPU);
+    type operation_t is (
+        ADD, SUBTRACT, SHIFT_LL, SHIFT_RL, SHIFT_RA, BITWISE_OR, BITWISE_XOR, BITWISE_AND, SLT,
+        LOAD_BYTE, LOAD_HALF_WORD, LOAD_WORD, LOAD_UBYTE, LOAD_UHALF_WORD,
+        STORE_BYTE, STORE_HALF_WORD, STORE_WORD,
+        MULTIPLY, MULTIPLY_UPPER, MULTIPLY_UPPER_SU, MULTIPLY_UPPER_UNS,
+        DIVIDE, DIVIDE_UNS, REMAINDER, REMAINDER_UNS
+    );
+
+    type decoded_instr_t is record
+        base      : instruction_t;
+        unit      : functional_unit_t;
+        operation : operation_t;
+        is_immed  : boolean;
+    end record decoded_instr_t;
     
 end package InstructionUtility;
 

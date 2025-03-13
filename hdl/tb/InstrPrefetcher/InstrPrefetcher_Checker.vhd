@@ -29,18 +29,6 @@ architecture rtl of InstrPrefetcher_Checker is
     
 begin
     
-    -- Checker: process
-    -- begin
-    --     wait until i_stimuli.resetn = '1';
-    --     while true loop;
-    --         wait until i_responses.instr_ren = '1';
-    --         t = new transaction_t(
-    --             pc        <= unsigned(i_responses.instr_addr),
-    --             requested <= true,
-    --             issued    <= false,
-    --             dropped   <= false
-    --         );
-    --     end loop;
-    -- end process Checker;
+    
     
 end architecture rtl;

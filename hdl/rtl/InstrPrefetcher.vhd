@@ -6,11 +6,16 @@
 -- signals:
 --      i_clk    : system clock frequency
 --      i_resetn : active low reset synchronous to the system clock
---      
---      o_instr_addr   : address bus for requesting an address
---      o_instr_ren    : read enable signal indicating address bus request is valid
+--    
+--      o_instr_araddr : address bus for requesting an address
+--      o_instr_arprot : protection level of the transaction
+--      o_instr_arvalid : read enable signal indicating address bus request is valid
+--      i_instr_arready : indicator that memory interface is ready to receive a request
+--
 --      i_instr_rdata  : returned instruction data bus
+--      i_instr_rresp : response indicating error occurred, if any
 --      i_instr_rvalid : valid signal indicating that instruction data is valid
+--      o_instr_rready : ready to receive instruction data
 --      
 --      i_cpu_ready : indicator that processor is ready to run next available instruction
 --      o_pc    : program counter of instruction
@@ -21,6 +26,19 @@
 --      i_pcwen : indicator that target pc is valid
 --
 -- description:
+--      This IP is designed to fetch instructions sequentially with maximum single-cycle
+--      throughput. It handles stalls caused by both the memory unit and the downstream
+--      processor. It is designed to the following specifications:
+--          1. Under no stall conditions, i.e. no PC updates, no CPU stalls, and no 
+--             memory stalls, it maintains a throughput of 1 instruction/cycle.
+--          2. When CPU stalls occur, the stall lasts as long as the CPU stall, but returns
+--             to designed throughput after stall.
+--          3. When memory stalls occur, the stall lasts as long as the memory stall,
+--             but returns to designed throughput after the stall.
+--          4. Instructions will always be requested, received, and issued in order
+--             based on the PC, barring PC updates.
+--          5. When PC updates occur, the prefetcher itself will stall until all
+--             dropped transactions have been received. 
 --
 -----------------------------------------------------------------------------------------------------------------------
 
@@ -36,6 +54,9 @@ library ndsmd_riscv;
     use ndsmd_riscv.InstructionUtility.all;
 
 entity InstrPrefetcher is
+    generic (
+        cNumTransactions : natural := 2
+    );
     port (
         -- system clock frequency
         i_clk : in std_logic;
@@ -90,7 +111,6 @@ architecture rtl of InstrPrefetcher is
         valid : std_logic;
     end record stall_buffer_t;
 
-    constant cNumTransactions : natural := 2;
     type prefetch_shift_t is array (0 to cNumTransactions - 1) of prefetch_request_t;
 
     signal pc             : unsigned(29 downto 0) := (others => '0');
@@ -137,6 +157,11 @@ begin
                         report "InstrPrefetcher::StateMachine: i_pc is not a multiple of 4." 
                             severity failure;
 
+                    -- A future feature here would be to check if the sequence PC, 
+                    -- PC + 4, PC + 8 are contained in the prefetch at all,
+                    -- which could save some additional cycles for prefetches.
+                    -- However, a napkin analysis of this would indicate that this is probably
+                    -- a rare behavior, and violates the principle of "common case fast".
                     if ((i_instr_arready and instr_arvalid) = '1') then
                         -- Forward propagate prefetch
                         for ii in 1 to cNumTransactions - 1 loop
