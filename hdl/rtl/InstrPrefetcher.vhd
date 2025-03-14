@@ -114,7 +114,7 @@ architecture rtl of InstrPrefetcher is
     type prefetch_shift_t is array (0 to cNumTransactions - 1) of prefetch_request_t;
 
     signal pc             : unsigned(29 downto 0) := (others => '0');
-    signal prefetch       : prefetch_shift_t;
+    --signal prefetch       : prefetch_shift_t;
     signal stalled        : stall_buffer_t;
     signal num_prefetches : natural range 0 to cNumTransactions := 0;
 
@@ -131,19 +131,24 @@ begin
     o_instr_rready <= instr_rready;
 
     StateMachine: process(i_clk)
+        variable prefetch : prefetch_shift_t;
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
                 instr_rready <= '0';
 
+                -- Indicate that the valid of both the stalled and prefetch
+                -- are no longer valid.
                 stalled.valid <= '0';
                 for ii in 0 to cNumTransactions - 1 loop
-                    prefetch(ii).dropped <= '1';
+                    prefetch(ii).valid := '0';
                 end loop;
 
+                -- Clear the data busses to the processor
                 o_pc    <= (others => '0');
                 o_valid <= '0';
 
+                -- Clear the instruction address read bus
                 instr_araddr  <= (others => '0');
                 instr_arvalid <= '0';
             else
@@ -164,27 +169,41 @@ begin
                     -- a rare behavior, and violates the principle of "common case fast".
                     if ((i_instr_arready and instr_arvalid) = '1') then
                         -- Forward propagate prefetch
-                        for ii in 1 to cNumTransactions - 1 loop
-                            prefetch(ii) <= prefetch(ii - 1);
+                        for ii in cNumTransactions - 1 downto 1 loop
+                            prefetch(ii) := prefetch(ii - 1);
                         end loop;
 
-                        prefetch(0).pc <= pc & "00";
-                        prefetch(0).valid <= '1';
-                        prefetch(0).dropped <= '1';
+                        prefetch(0).pc := pc & "00";
+                        prefetch(0).valid := '1';
+                        prefetch(0).dropped := '1';
                     end if;
 
                     instr_araddr  <= std_logic_vector(i_pc(31 downto 2)) & "00";
                     instr_arvalid <= '1';
 
                     for ii in 0 to cNumTransactions - 1 loop
-                        prefetch(ii).dropped <= '1';
+                        prefetch(ii).dropped := '1';
                     end loop;
                 else
+                    -- If the processor is ready for new instructions, we're ready for new instructions,
+                    -- as long as there are no stalled instructions.
                     instr_rready <= i_cpu_ready and not stalled.valid;
     
-                    -- We're assuming the rresp is always OKAY.
+                    -------------------------------------------------------------------------------------
+                    --                           New Data Receipt Handling
+                    -------------------------------------------------------------------------------------
+                    -- Note: We're assuming the rresp is always OKAY.
                     if ((i_instr_rvalid and instr_rready) = '1') then
+                        -- If we got new instruction data, we either have to hand it off to the processor,
+                        -- or hold onto it if we have a stalled instruction.
+
+                        ---------------------------------------------------------------------------------
+                        --                            CPU Ready To Accept
+                        ---------------------------------------------------------------------------------
                         if (i_cpu_ready = '1') then
+                            -- If the processor is ready, and we have a stalled instruction, hand off the 
+                            -- stalled instruction and then grab the least recent prefetch and store it 
+                            -- with the new data in stalled.
                             if (stalled.valid = '1') then
                                 -- Provide stalled instruction
                                 o_pc    <= stalled.pc;
@@ -203,6 +222,9 @@ begin
                                 end loop;
     
                             else
+                                -- Otherwise, if we don't have an existing stalled instruction,
+                                -- we can just grab the deepest prefetch and give it to the CPU.
+
                                 -- Take deepest prefetch and provide it to CPU.
                                 for ii in cNumTransactions - 1 downto 0 loop
                                     if (prefetch(ii).valid = '1') then
@@ -210,29 +232,46 @@ begin
                                         o_instr <= decode(i_instr_rdata);
                                         o_valid <= not prefetch(ii).dropped;
     
+                                        -- Make sure to clear the valid flag of the prefetch
+                                        -- we grabbed since it is not guaranteed we will
+                                        -- remove this prefetch during forward propagation.
+                                        prefetch(ii).valid := '0';
                                         exit;
                                     end if;
                                 end loop;
                             end if;
+                            
+                            -- Forward propagate prefetch
+                            for ii in cNumTransactions - 1 downto 1 loop
+                                prefetch(ii) := prefetch(ii - 1);
+                            end loop;
 
+                            -- If the memory interface has accepted the latest request, that's great,
+                            -- add it to the prefetch. Otherwise, since we forward propagate regardless,
+                            -- fill the 0th slot with an empty prefetch slot.
                             if ((i_instr_arready and instr_arvalid) = '1') then
-                                -- Forward propagate prefetch
-                                for ii in 1 to cNumTransactions - 1 loop
-                                    prefetch(ii) <= prefetch(ii - 1);
-                                end loop;
+                                prefetch(0).pc      := pc & "00";
+                                prefetch(0).valid   := '1';
+                                prefetch(0).dropped := '0';
     
-                                prefetch(0).pc      <= pc & "00";
-                                prefetch(0).valid   <= '1';
-                                prefetch(0).dropped <= '0';
-    
+                                -- Only when a prefetch has been accepted do we allow 
+                                -- both the PC and the araddr to update to the next PC.
                                 pc            <= pc + 1;
                                 instr_araddr  <= std_logic_vector(pc + 1) & "00";
                                 instr_arvalid <= '1';
-                            else
+                            else    
+                                prefetch(0).pc      := pc & "00";
+                                prefetch(0).valid   := '0';
+                                prefetch(0).dropped := '0';
+
                                 instr_araddr  <= std_logic_vector(pc) & "00";
                                 instr_arvalid <= '1';
                             end if;
                         else
+                            ---------------------------------------------------------------------------------
+                            --                          CPU NOT Ready To Accept
+                            ---------------------------------------------------------------------------------
+
                             -- Store it as a stalled instruction
                             assert (stalled.valid = '0') report "InstrPrefetcher::StateMachine: stalled.valid " & 
                                 "is high when getting new instruction data and the CPU is stalled" severity failure;
@@ -243,6 +282,8 @@ begin
                                     stalled.pc    <= prefetch(ii).pc;
                                     stalled.instr <= i_instr_rdata;
                                     stalled.valid <= not prefetch(ii).dropped;
+
+                                    prefetch(ii).valid := '0';
     
                                     exit;
                                 end if;
@@ -250,33 +291,63 @@ begin
                         end if;
     
                     else
+                        -------------------------------------------------------------------------------------
+                        --                       Waiting for Data Receipt Handling
+                        -------------------------------------------------------------------------------------
+
+
+                        -- If the CPU is ready, just go ahead and get rid of what's in the stalled registers.
                         if (i_cpu_ready = '1') then
                             if (stalled.valid = '1') then
                                 -- Provide stalled instruction
                                 o_pc    <= stalled.pc;
                                 o_instr <= decode(stalled.instr);
                                 o_valid <= '1';
+
+                                stalled.valid <= '0';
                             end if;
                         end if;
 
-                        if ((i_instr_arready and instr_arvalid) = '1' and num_prefetches < cNumTransactions) then
-                            -- Forward propagate prefetch
-                            for ii in 1 to cNumTransactions - 1 loop
-                                prefetch(ii) <= prefetch(ii - 1);
-                            end loop;
+                        -- If we have prefetch slots, fill them.
+                        if (num_prefetches < cNumTransactions) then
 
-                            prefetch(0).pc      <= pc & "00";
-                            prefetch(0).valid   <= '1';
-                            prefetch(0).dropped <= '0';
+                            -- If the memory interface has accepted the latest request, that's great,
+                            -- add it to the prefetch. Otherwise, we have no need to update the prefetches.
+                            if ((i_instr_arready and instr_arvalid) = '1') then
 
-                            pc            <= pc + 1;
-                            instr_araddr  <= std_logic_vector(pc + 1) & "00";
-                            instr_arvalid <= '1';
+                                -- Forward propagate prefetch
+                                for ii in cNumTransactions - 1 downto 1 loop
+                                    prefetch(ii) := prefetch(ii - 1);
+                                end loop;
+    
+                                prefetch(0).pc      := pc & "00";
+                                prefetch(0).valid   := '1';
+                                prefetch(0).dropped := '0';
+    
+                                pc            <= pc + 1;
+                                instr_araddr  <= std_logic_vector(pc + 1) & "00";
+                                -- If we're about to run afoul of the maximum number of prefetches,
+                                -- don't initiate another prefetch.
+                                if (num_prefetches + 1 = cNumTransactions) then
+                                    instr_arvalid <= '0';
+                                else
+                                    instr_arvalid <= '1';
+                                end if;
+    
+                                num_prefetches <= num_prefetches + 1;
+                            else
+                                -- Like mentioned in the AXI spec, if we have a request, allow it to
+                                -- sit until accepted.
 
-                            num_prefetches <= num_prefetches + 1;
+                                instr_araddr  <= std_logic_vector(pc) & "00";
+                                instr_arvalid <= '1';
+                            end if;
                         else
+                            -- If we're about to run afoul of the maximum number of prefetches,
+                            -- don't initiate another prefetch.
+
                             instr_araddr  <= std_logic_vector(pc) & "00";
-                            instr_arvalid <= '1';
+                            instr_arvalid <= '0';
                         end if;
                     end if;
                 end if;

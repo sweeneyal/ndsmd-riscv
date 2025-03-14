@@ -20,9 +20,14 @@ vu.add_osvvm()
 # vu.add_verilog_builtins()
 
 universal = vu.add_library("universal")
-files = get_vhdl_files('./libraries/universal/hdl', recursive=True)
+files = get_vhdl_files('./libraries/universal/hdl/pkgs', recursive=True)
 for file in files:
     universal.add_source_file(file)
+
+simtools = vu.add_library("simtools")
+files = get_vhdl_files('./libraries/simtools/hdl/pkgs', recursive=True)
+for file in files:
+    simtools.add_source_file(file)
 
 # Create library 'lib'
 ndsmd = vu.add_library("ndsmd_riscv")
