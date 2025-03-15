@@ -116,11 +116,13 @@ architecture rtl of InstrPrefetcher is
     signal pc             : unsigned(29 downto 0) := (others => '0');
     --signal prefetch       : prefetch_shift_t;
     signal stalled        : stall_buffer_t;
-    signal num_prefetches : natural range 0 to cNumTransactions := 0;
-
+    
     signal instr_araddr  : std_logic_vector(31 downto 0) := (others => '0');
     signal instr_arvalid : std_logic := '0';
     signal instr_rready  : std_logic := '0';
+    
+    signal debug_num_prefetches : natural range 0 to cNumTransactions := 0;
+    signal debug_prefetches : prefetch_shift_t;
 begin
 
     o_instr_araddr  <= instr_araddr;
@@ -132,6 +134,7 @@ begin
 
     StateMachine: process(i_clk)
         variable prefetch : prefetch_shift_t;
+        variable num_prefetches : natural range 0 to cNumTransactions := 0;
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
@@ -236,6 +239,7 @@ begin
                                         -- we grabbed since it is not guaranteed we will
                                         -- remove this prefetch during forward propagation.
                                         prefetch(ii).valid := '0';
+                                        num_prefetches := num_prefetches - 1;
                                         exit;
                                     end if;
                                 end loop;
@@ -243,7 +247,10 @@ begin
                             
                             -- Forward propagate prefetch
                             for ii in cNumTransactions - 1 downto 1 loop
-                                prefetch(ii) := prefetch(ii - 1);
+                                if (prefetch(ii).valid = '0') then
+                                    prefetch(ii) := prefetch(ii - 1);
+                                    prefetch(ii - 1).valid := '0';
+                                end if;
                             end loop;
 
                             -- If the memory interface has accepted the latest request, that's great,
@@ -253,6 +260,8 @@ begin
                                 prefetch(0).pc      := pc & "00";
                                 prefetch(0).valid   := '1';
                                 prefetch(0).dropped := '0';
+
+                                num_prefetches := num_prefetches + 1;
     
                                 -- Only when a prefetch has been accepted do we allow 
                                 -- both the PC and the araddr to update to the next PC.
@@ -298,6 +307,7 @@ begin
 
                         -- If the CPU is ready, just go ahead and get rid of what's in the stalled registers.
                         if (i_cpu_ready = '1') then
+                            o_valid <= '0';
                             if (stalled.valid = '1') then
                                 -- Provide stalled instruction
                                 o_pc    <= stalled.pc;
@@ -317,24 +327,26 @@ begin
 
                                 -- Forward propagate prefetch
                                 for ii in cNumTransactions - 1 downto 1 loop
-                                    prefetch(ii) := prefetch(ii - 1);
+                                    if (prefetch(ii).valid = '0') then
+                                        prefetch(ii) := prefetch(ii - 1);
+                                        prefetch(ii - 1).valid := '0';
+                                    end if;
                                 end loop;
     
                                 prefetch(0).pc      := pc & "00";
                                 prefetch(0).valid   := '1';
                                 prefetch(0).dropped := '0';
+                                num_prefetches      := num_prefetches + 1;
     
                                 pc            <= pc + 1;
                                 instr_araddr  <= std_logic_vector(pc + 1) & "00";
                                 -- If we're about to run afoul of the maximum number of prefetches,
                                 -- don't initiate another prefetch.
-                                if (num_prefetches + 1 = cNumTransactions) then
+                                if (num_prefetches = cNumTransactions) then
                                     instr_arvalid <= '0';
                                 else
                                     instr_arvalid <= '1';
                                 end if;
-    
-                                num_prefetches <= num_prefetches + 1;
                             else
                                 -- Like mentioned in the AXI spec, if we have a request, allow it to
                                 -- sit until accepted.
@@ -351,6 +363,9 @@ begin
                         end if;
                     end if;
                 end if;
+
+                debug_prefetches <= prefetch;
+                debug_num_prefetches <= num_prefetches;
             end if;
         end if;
     end process StateMachine;
