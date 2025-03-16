@@ -293,10 +293,62 @@ begin
                                     stalled.valid <= not prefetch(ii).dropped;
 
                                     prefetch(ii).valid := '0';
-    
+                                    num_prefetches := num_prefetches - 1;
                                     exit;
                                 end if;
                             end loop;
+
+                            -- Forward propagate prefetch
+                            for ii in cNumTransactions - 1 downto 1 loop
+                                if (prefetch(ii).valid = '0') then
+                                    prefetch(ii) := prefetch(ii - 1);
+                                    prefetch(ii - 1).valid := '0';
+                                end if;
+                            end loop;
+
+                            -- If we have prefetch slots, fill them.
+                            if (num_prefetches < cNumTransactions) then
+
+                                -- If the memory interface has accepted the latest request, that's great,
+                                -- add it to the prefetch. Otherwise, we have no need to update the prefetches.
+                                if ((i_instr_arready and instr_arvalid) = '1') then
+
+                                    -- Forward propagate prefetch
+                                    for ii in cNumTransactions - 1 downto 1 loop
+                                        if (prefetch(ii).valid = '0') then
+                                            prefetch(ii) := prefetch(ii - 1);
+                                            prefetch(ii - 1).valid := '0';
+                                        end if;
+                                    end loop;
+        
+                                    prefetch(0).pc      := pc & "00";
+                                    prefetch(0).valid   := '1';
+                                    prefetch(0).dropped := '0';
+                                    num_prefetches      := num_prefetches + 1;
+        
+                                    pc            <= pc + 1;
+                                    instr_araddr  <= std_logic_vector(pc + 1) & "00";
+                                    -- If we're about to run afoul of the maximum number of prefetches,
+                                    -- don't initiate another prefetch.
+                                    if (num_prefetches = cNumTransactions) then
+                                        instr_arvalid <= '0';
+                                    else
+                                        instr_arvalid <= '1';
+                                    end if;
+                                else
+                                    -- Like mentioned in the AXI spec, if we have a request, allow it to
+                                    -- sit until accepted.
+
+                                    instr_araddr  <= std_logic_vector(pc) & "00";
+                                    instr_arvalid <= '1';
+                                end if;
+                            else
+                                -- If we're about to run afoul of the maximum number of prefetches,
+                                -- don't initiate another prefetch.
+
+                                instr_araddr  <= std_logic_vector(pc) & "00";
+                                instr_arvalid <= '0';
+                            end if;
                         end if;
     
                     else

@@ -74,6 +74,8 @@ begin
 
     TestRunner : process
         variable rand : RandomPType;
+        variable idx  : natural := 0;
+        variable rand_wait : natural := 0;
     begin
         test_runner_setup(runner, nested_runner_cfg);
   
@@ -162,6 +164,56 @@ begin
                 
             elsif run("t_rand_cpu_stall") then
                 info("Running maxthroughput delay with random stall");
+                stimuli.resetn <= '0';
+                stimuli.instr_arready <= '0';
+                stimuli.instr_rresp   <= "00";
+                stimuli.instr_rdata   <= (others => '0');
+                stimuli.instr_rvalid  <= '0';
+                stimuli.cpu_ready     <= '0';
+                stimuli.pc            <= (others => '0');
+                stimuli.pcwen         <= '0';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                stimuli.resetn <= '1';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                stimuli.instr_arready <= '1';
+                stimuli.cpu_ready     <= '1';
+
+                for ii in 0 to 10 loop
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+                end loop;
+
+                idx       := 0;
+                rand_wait := rand.RandInt(0, 10);
+                while idx < 100 loop
+                    stimuli.cpu_ready <= '0';
+                    for jj in 0 to rand_wait loop
+                        wait until rising_edge(clk);
+                        wait for 100 ps;
+                        if (i_responses.instr_rready = '1') then
+                            stimuli.instr_rdata  <= to_slv(idx, 32);
+                            stimuli.instr_rvalid <= '1';
+                            stimuli.instr_rresp  <= "00";
+                            idx := idx + 1;
+                        end if;
+                    end loop;
+                    rand_wait := rand.RandInt(0, 10);
+
+                    stimuli.cpu_ready <= '1';
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+                    if (i_responses.instr_rready = '1') then
+                        stimuli.instr_rdata  <= to_slv(idx, 32);
+                        stimuli.instr_rvalid <= '1';
+                        stimuli.instr_rresp  <= "00";
+                        idx := idx + 1;
+                    end if;
+                end loop;
                 
             elsif run("t_rand_mem_stall") then
                 info("Running maxthroughput delay with random stall");
