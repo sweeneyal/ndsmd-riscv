@@ -23,6 +23,8 @@ library osvvm;
 library universal;
     use universal.CommonFunctions.all;
 
+library simtools;
+
 library tb_ndsmd_riscv;
     use tb_ndsmd_riscv.InstrPrefetcher_Utility.all;
 
@@ -53,6 +55,11 @@ architecture rtl of InstrPrefetcher_Stimuli is
     --         end if;
     --     end loop;
     -- end procedure;
+
+    package TransactionPackage is new simtools.GenericListPkg
+        generic map (element_t => transaction_t);
+
+    shared variable transactions : TransactionPackage.list;
 begin
     
     o_stimuli <= stimuli;
@@ -76,6 +83,7 @@ begin
         variable rand : RandomPType;
         variable idx  : natural := 0;
         variable rand_wait : natural := 0;
+        variable transaction : transaction_t;
     begin
         test_runner_setup(runner, nested_runner_cfg);
   
@@ -192,7 +200,7 @@ begin
                 rand_wait := rand.RandInt(0, 10);
                 while idx < 100 loop
                     stimuli.cpu_ready <= '0';
-                    for jj in 0 to rand_wait loop
+                    for jj in 1 to rand_wait loop
                         wait until rising_edge(clk);
                         wait for 100 ps;
                         if (i_responses.instr_rready = '1') then
@@ -217,6 +225,60 @@ begin
                 
             elsif run("t_rand_mem_stall") then
                 info("Running maxthroughput delay with random stall");
+                stimuli.resetn <= '0';
+                stimuli.instr_arready <= '0';
+                stimuli.instr_rresp   <= "00";
+                stimuli.instr_rdata   <= (others => '0');
+                stimuli.instr_rvalid  <= '0';
+                stimuli.cpu_ready     <= '0';
+                stimuli.pc            <= (others => '0');
+                stimuli.pcwen         <= '0';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                stimuli.resetn <= '1';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                stimuli.cpu_ready     <= '1';
+
+                for ii in 0 to 10 loop
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+                end loop;
+
+                idx       := 0;
+                rand_wait := rand.RandInt(0, 10);
+                while idx < 100 loop
+                    stimuli.instr_arready <= not stimuli.instr_arready;
+                    for jj in 1 to rand_wait loop
+                        if (transactions.length > 0) then
+                            stimuli.instr_rdata  <= to_slv(idx, 32);
+                            stimuli.instr_rvalid <= '1';
+                            stimuli.instr_rresp  <= "00";
+                            idx := idx + 1;
+
+                            transactions.delete(0);
+                        else
+                            stimuli.instr_rvalid <= '0';
+                        end if;
+
+                        wait until rising_edge(clk);
+                        wait for 100 ps;
+
+                        if ((stimuli.instr_arready and i_responses.instr_arvalid) = '1') then
+                            transactions.append(
+                                transaction_t'(
+                                    pc        => unsigned(i_responses.instr_araddr),
+                                    requested => true,
+                                    issued    => false,
+                                    dropped   => false
+                                ));
+                        end if;
+                    end loop;
+                    rand_wait := rand.RandInt(0, 10);
+                end loop;
                 
             elsif run("t_bathtub_cpu_stall") then
                 info("Running maxthroughput delay with bathtub stall");
