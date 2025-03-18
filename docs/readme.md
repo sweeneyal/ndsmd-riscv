@@ -6,10 +6,14 @@ NDSMD is a RISC-V soft core processor IP designed to be an extensible demonstrat
 
 ## Development Plan
 
+![text](arch_diagram.png)
+
+> *Note: Items in green have been simulated to enough satisfaction to be considered initially validated. Items in blue have been synthesized and verified in hardware.*
+
 The current development plan is as follows:
-- [ ] Develop basic version of RV32I for use with BRAM ROM and RAM.
-- [ ] Develop multilevel cache heirarchy with AXI-based L1iCache, L1dCache, L2uCache, with a master controller for testing.
-- [ ] Develop branch prediction mechanism in basic BRAM ROM/RAM RV32I demonstration.
+- [ ] Develop basic version of RV32I for use with BRAM ROM and RAM. Definition of done is when any arbitrary program can be run from an on-chip ROM integrated with the synthesized platform successfully.
+- [ ] Develop multilevel cache heirarchy with AXI-based L1iCache, L1dCache, L2uCache, with a master controller for testing. Definition of done is a synthesized platform that can read and write to onboard RAM, as well as a characterization of how many hits/misses occur and AMAT.
+- [ ] Develop branch prediction mechanism in basic BRAM ROM/RAM RV32I demonstration. Definition of done is a synthesized implementation leveraging the branch prediction mechanism and a comparison between performance with and without the mechanism.
 - [ ] Develop FPU with master controller and BRAM RAM interface to demonstrate processing of floating point instructions.
 - [ ] Develop Tomasulo-based OOO architecture leveraging developed RV32I demo and new FPU.
 
