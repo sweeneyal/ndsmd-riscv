@@ -43,6 +43,9 @@ package InstructionUtility is
     function get_utype(instr : std_logic_vector(31 downto 0)) return std_logic_vector;
     function get_btype(instr : std_logic_vector(31 downto 0)) return std_logic_vector;
     function get_jtype(instr : std_logic_vector(31 downto 0)) return std_logic_vector;
+
+    function is_immed(opcode : std_logic_vector(6 downto 0)) return boolean;
+
     function decode(instr : std_logic_vector(31 downto 0)) return instruction_t;
 
     constant cBranchOpcode    : std_logic_vector(6 downto 0) := "1100011";
@@ -70,9 +73,9 @@ package InstructionUtility is
     -- This applies a second layer of decoding, allowing more elaborate decoration
     -- of the instruction, e.g. indicating the functional unit type it uses, the particular
     -- operation it performs, etc.
-    type functional_unit_t is (ALU, FPU);
+    type functional_unit_t is (ALU, MEXT);
     type operation_t is (
-        ADD, SUBTRACT, SHIFT_LL, SHIFT_RL, SHIFT_RA, BITWISE_OR, BITWISE_XOR, BITWISE_AND, SLT,
+        ADD, SUBTRACT, SHIFT_LL, SHIFT_RL, SHIFT_RA, BITWISE_OR, BITWISE_XOR, BITWISE_AND, SLT, SLTU,
         LOAD_BYTE, LOAD_HALF_WORD, LOAD_WORD, LOAD_UBYTE, LOAD_UHALF_WORD,
         STORE_BYTE, STORE_HALF_WORD, STORE_WORD,
         MULTIPLY, MULTIPLY_UPPER, MULTIPLY_UPPER_SU, MULTIPLY_UPPER_UNS,
@@ -151,6 +154,18 @@ package body InstructionUtility is
     function get_jtype(instr : std_logic_vector(31 downto 0)) return std_logic_vector is
     begin
         return instr(31) & instr(19 downto 12) & instr(20) & instr(30 downto 21) & '0';
+    end function;
+
+    function is_immed(opcode : std_logic_vector(6 downto 0)) return boolean is
+    begin
+        return opcode = cLoadUpperOpcode or 
+               opcode = cAuipcOpcode or
+               opcode = cJumpOpcode or
+               opcode = cJumpRegOpcode or
+               opcode = cBranchOpcode or
+               opcode = cLoadOpcode or
+               opcode = cStoreOpcode or
+               opcode = cAluImmedOpcode; 
     end function;
 
     function decode(instr : std_logic_vector(31 downto 0)) return instruction_t is
