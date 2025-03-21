@@ -272,6 +272,9 @@ architecture rtl of ControlEngine is
 
             when cJumpRegOpcode | cJumpOpcode | cAuipcOpcode | cLoadUpperOpcode =>
                 -- Indicate the functional unit required for this operation.
+
+                -- Possibly could make an additional port into the register file to grab the 
+                -- register needed for the JALR instruction...
                 decoded.unit := ALU;
                 decoded.destination := REGISTERS;
 
