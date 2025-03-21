@@ -51,10 +51,12 @@ entity ControlEngine is
         -- indicator that pc and instr are both valid        
         i_valid     : in std_logic;
 
+        -- current status of the entire datapath
         i_status : in datapath_status_t;
-        o_pc     : out unsigned(31 downto 0);
-        o_instr  : out decoded_instr_t;
-        o_valid  : out std_logic
+        -- next issued instruction
+        o_issued : out stage_status_t;
+        -- indicator that the next issued instruction is valid
+        o_ivalid : out std_logic
     );
 end entity ControlEngine;
 
@@ -67,6 +69,9 @@ architecture rtl of ControlEngine is
         variable decoded : decoded_instr_t;
     begin
         decoded := res;
+
+        decoded.unit := ALU;
+        decoded.operation := NULL_OP;
 
         ----------------------------------------------------------------------------------------
         --                            DECODE INSTRUCTION INTO ENUMS
@@ -88,7 +93,15 @@ architecture rtl of ControlEngine is
                 -- so this is relatively simple.
 
                 -- Indicate the functional unit required for this operation.
-                decoded.unit := ALU;
+                decoded.unit        := ALU;
+                -- Since we can either use a register operand, the program counter, or 
+                -- another hardcoded zero for the first source, indicate the correct source.
+                decoded.source1     := REGISTERS;
+                -- The destination of the instruction is either a register, memory, or it is a branch
+                -- instruction where there is no destination.
+                decoded.destination := REGISTERS;
+                decoded.is_immed    := true;
+                decoded.immediate   := std_logic_vector(resize(signed(instr.itype), 32));
 
                 -- Indicate the operation performed by the functional unit.
                 -- This converts the funct3 and funct7 into an internal, 
@@ -123,13 +136,18 @@ architecture rtl of ControlEngine is
 
             when cAluOpcode =>
                 -- Indicate the functional unit required for this operation.
-                decoded.unit := ALU;
+                decoded.unit        := ALU;
+                decoded.source1     := REGISTERS;
+                decoded.destination := REGISTERS;
                 -- This opcode has an overloading that allows it to encode for
                 -- multiplication and division operations. However, these types of
                 -- operations use a different functional unit in this implementation.
                 if (instr.funct7 = "0000001") then
                     decoded.unit := MEXT;
                 end if;
+
+                decoded.is_immed  := false;
+                decoded.immediate := (others => '0');
 
                 -- Indicate the operation performed by the functional unit.
                 -- This converts the funct3 and funct7 into an internal, 
@@ -214,7 +232,18 @@ architecture rtl of ControlEngine is
                 
             when cStoreOpcode | cLoadOpcode =>
                 -- Indicate the functional unit required for this operation.
-                decoded.unit := ALU;
+                decoded.unit      := ALU;
+                decoded.source1   := REGISTERS;
+                decoded.is_immed  := true;
+                if (instr.opcode = cStoreOpcode) then
+                    decoded.destination := MEMORY;
+                    decoded.immediate   := std_logic_vector(resize(signed(instr.stype), 32));
+                else
+                    decoded.destination := REGISTERS;
+                    decoded.immediate   := std_logic_vector(resize(signed(instr.itype), 32));
+                end if;
+                
+
                 -- For loads and stores, we're using the ALU to add the immediate to
                 -- regs[rs1], so we use the ADD operation.
                 decoded.operation := ADD;
@@ -222,6 +251,14 @@ architecture rtl of ControlEngine is
             when cBranchOpcode =>
                 -- Indicate the functional unit required for this operation.
                 decoded.unit := ALU;
+                decoded.destination := BRANCH;
+
+                -- Despite using the immediate anyway as part of the jump, from the 
+                -- perspective of the ALU, this is not an is_immed because it functionally
+                -- performs SLT, however, the branch does still use the immediate.
+                decoded.is_immed  := false;
+                decoded.immediate := std_logic_vector(resize(signed(instr.btype), 32));
+
                 -- For branches, we're using the ALU to check the comparison of 
                 -- regs[rs1] and regs[rs2], so we use the SLT or SLTU operation.
                 if (instr.funct3 = "000" or instr.funct3 = "001" or 
@@ -233,16 +270,29 @@ architecture rtl of ControlEngine is
                     assert false report "ControlEngine::contextual_decode: Malformed Instruction" severity failure;
                 end if;
 
-            when cJumpRegOpcode =>
+            when cJumpRegOpcode | cJumpOpcode | cAuipcOpcode | cLoadUpperOpcode =>
                 -- Indicate the functional unit required for this operation.
                 decoded.unit := ALU;
+                decoded.destination := REGISTERS;
+
+                decoded.is_immed  := true;
+                if (instr.opcode = cJumpOpcode) then
+                    decoded.source1   := PROGRAM_COUNTER;
+                    decoded.immediate := std_logic_vector(resize(signed(instr.jtype), 32));
+                elsif (instr.opcode = cJumpRegOpcode) then
+                    decoded.source1   := REGISTERS;
+                    decoded.immediate := std_logic_vector(resize(signed(instr.itype), 32));
+                elsif (instr.opcode = cAuipcOpcode) then
+                    decoded.source1   := PROGRAM_COUNTER;
+                    decoded.immediate := std_logic_vector(resize(signed(instr.utype), 32));
+                else
+                    decoded.source1   := ZERO;
+                    decoded.immediate := std_logic_vector(resize(signed(instr.utype), 32));
+                end if;
+
                 -- For indirect jumps, we're using the ALU to add the immediate to
                 -- regs[rs1], so we use the ADD operation.
                 decoded.operation := ADD;
-
-            when cJumpOpcode | cAuipcOpcode | cLoadUpperOpcode =>
-                -- How do we want to populate these?
-                assert false report "ControlEngine::contextual_decode: I'm still thinking about this!" severity failure;
 
             when others =>
                 assert false report "ControlEngine::contextual_decode: Malformed Instruction" severity failure;
@@ -276,6 +326,7 @@ architecture rtl of ControlEngine is
     end function;
 begin
     
-    
+    -- An idea is to precompute the branch and jump PCs here (with the exception of JALR, not sure what to do here.)
+    -- This same logic can be used for LUI and AUIPC.
     
 end architecture rtl;

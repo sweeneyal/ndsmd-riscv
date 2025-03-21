@@ -73,20 +73,63 @@ package InstructionUtility is
     -- This applies a second layer of decoding, allowing more elaborate decoration
     -- of the instruction, e.g. indicating the functional unit type it uses, the particular
     -- operation it performs, etc.
+
+    -- Firstly, we need to indicate what functional unit is required for the operation. 
+    -- the ALU is the integer arithmatic logic unit, and the MEXT is the M-Extension functional
+    -- unit that adds integer multiplication, division, and remainder operations.
     type functional_unit_t is (ALU, MEXT);
+
+    -- For each functional unit, there are a set of possible operations that can occur.
+    -- The ALU operations are standard RISC-V instructions with the operand types abstracted,
+    -- and the MEXT operations are the M-extension instructions. The functional units and 
+    -- operations cannot cross over, and this is handled in the contextual_decode in the control unit.
     type operation_t is (
+        -- ALU operations
         ADD, SUBTRACT, SHIFT_LL, SHIFT_RL, SHIFT_RA, BITWISE_OR, BITWISE_XOR, BITWISE_AND, SLT, SLTU,
-        LOAD_BYTE, LOAD_HALF_WORD, LOAD_WORD, LOAD_UBYTE, LOAD_UHALF_WORD,
-        STORE_BYTE, STORE_HALF_WORD, STORE_WORD,
+        -- MEXT operations
         MULTIPLY, MULTIPLY_UPPER, MULTIPLY_UPPER_SU, MULTIPLY_UPPER_UNS,
-        DIVIDE, DIVIDE_UNS, REMAINDER, REMAINDER_UNS
+        DIVIDE, DIVIDE_UNS, REMAINDER, REMAINDER_UNS,
+        -- Default, null operation
+        NULL_OP
     );
 
+    -- Memory operations are kept separate from ALU/MEXT, because the ALU is used to compute the 
+    -- address of the memory operation, and the memory operation is completed in the mem access stage.
+    type memoperation_t is (
+        -- Memory operations
+        LOAD_BYTE, LOAD_HALF_WORD, LOAD_WORD, LOAD_UBYTE, LOAD_UHALF_WORD,
+        STORE_BYTE, STORE_HALF_WORD, STORE_WORD);
+
+    -- Since we can either use a register operand, the program counter, or 
+    -- another hardcoded zero for the first source, indicate the correct source.
+    -- Typically, this is just the registers, but AUIPC, JAL, and LUI are the exception.
+    type source_t is (REGISTERS, PROGRAM_COUNTER, ZERO);
+
+    -- The destination of the instruction is either a register, memory, or it is a branch
+    -- instruction where there is no destination.
+    type destination_t is (REGISTERS, MEMORY, BRANCH);
+
     type decoded_instr_t is record
-        base      : instruction_t;
-        unit      : functional_unit_t;
+        -- the base decoded instruction, including all relevant fields
+        base : instruction_t;
+        -- the functional unit used during this operation
+        unit : functional_unit_t;
+        -- the specific operation performed for the functional unit
         operation : operation_t;
-        is_immed  : boolean;
+
+        -- left-hand side operand fields
+        source1 : source_t;
+        
+        -- immediate specific fields
+        is_immed : boolean;
+        immediate : std_logic_vector(31 downto 0);
+
+        -- memory specific fields
+        is_memory : boolean;
+        memoperation : memoperation_t;
+
+        -- result definition field
+        destination : destination_t;
     end record decoded_instr_t;
     
 end package InstructionUtility;
