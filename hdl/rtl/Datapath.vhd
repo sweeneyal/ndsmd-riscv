@@ -118,6 +118,11 @@ begin
     -- port map (
 
     -- );
+
+    -- For the eventual tomasulo, leverage a FIFO that allows me to 
+    -- keep track of the issued instructions. For example, we can issue
+    -- ids 0 thru 63, but when 0 needs to be reissued, we need to make sure
+    -- we get thru the previously issued ids before we complete 0.
     
     
 end architecture rtl;

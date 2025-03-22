@@ -274,7 +274,8 @@ architecture rtl of ControlEngine is
                 -- Indicate the functional unit required for this operation.
 
                 -- Possibly could make an additional port into the register file to grab the 
-                -- register needed for the JALR instruction...
+                -- register needed for the JALR instruction. However, this has issues where
+                -- hazards need to be respected.
                 decoded.unit := ALU;
                 decoded.destination := REGISTERS;
 
