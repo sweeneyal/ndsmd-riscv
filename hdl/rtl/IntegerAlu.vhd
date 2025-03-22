@@ -37,9 +37,6 @@ library ndsmd_riscv;
 
 entity IntegerAlu is
     port (
-        i_clk    : in std_logic;
-        i_resetn : in std_logic;
-
         i_decoded : in decoded_instr_t;
         i_opA     : in std_logic_vector(31 downto 0);
         i_opB     : in std_logic_vector(31 downto 0);

@@ -42,7 +42,6 @@ entity Datapath is
 
         o_status : out datapath_status_t;
         i_issued : in stage_status_t;
-        i_ivalid : in std_logic;
 
         -- AXI-like interface to allow for easier implementation
         -- address bus for requesting an address
@@ -96,18 +95,65 @@ begin
     
     -- eRegisters : entity ndsmd_riscv.RegisterFile
     -- port map (
+    --     i_clk    => i_clk,
+    --     i_resetn => i_resetn,
 
+    --     i_rs1 => ,
+    --     o_opA => ,
+
+    --     i_rs2 => ,
+    --     o_opB => ,
+
+    --     i_rd    => ,
+    --     i_res   => ,
+    --     i_valid => ,
     -- );
 
     -- eAlu : entity ndsmd_riscv.IntegerAlu
     -- port map (
+    --     i_decoded => ,
+    --     i_opA     => ,
+    --     i_opB     => ,
 
+    --     o_res => ,
+    --     o_eq  => 
     -- );
 
     -- eMext : entity ndsmd_riscv.MExtension
     -- port map (
 
     -- );
+
+    -- ExecuteStage: process(i_clk)
+    -- begin
+    --     if rising_edge(i_clk) then
+    --         if (i_resetn = '0') then
+    --             exec_res <= (others => '0');
+    --         else
+    --             -- If the issued instruction is valid, and we're not stalled, 
+    --             -- then we can accept a new instruction.
+    --             if (i_issued.valid = '1' and execute_status.stall_reason = NOT_STALLED) then
+    --                 execute_status <= i_issued;
+
+    --                 -- If it's the ALU, the instruction is done already, so grab the ALU
+    --                 -- result and move on.
+    --                 if (i_issued.decoded.unit = ALU) then
+    --                     exec_res <= alu_res;
+    --                 elsif (i_issued.decoded.unit = MEXT) then
+    --                     -- However, if it's the MEXT, we need to stall until the MEXT is done.
+    --                     execute_status.stall_reason <= EXECUTION_STALL;
+    --                 end if;
+    --             elsif (execute_status.stall_reason = EXECUTION_STALL) then
+    --                 -- We would only be here if there's an MEXT instruction running. Wait until the
+    --                 -- MEXT instruction finishes.
+    --                 if (mext_valid = '1') then
+    --                     exec_res <= mext_res;
+    --                     execute_status.stall_reason <= NOT_STALLED;
+    --                 end if;
+    --             end if;
+    --         end if;
+    --     end if;
+    -- end process ExecuteStage;
 
     -- eMemoryUnit : entity ndsmd_riscv.MemoryAccessUnit
     -- port map (
