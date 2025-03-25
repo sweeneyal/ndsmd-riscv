@@ -328,9 +328,82 @@ architecture rtl of ControlEngine is
 
         return decoded;
     end function;
+
+    signal stalled : stage_status_t;
+    signal cpu_ready : std_logic := '0';
 begin
     
     -- An idea is to precompute the branch and jump PCs here (with the exception of JALR, not sure what to do here.)
     -- This same logic can be used for LUI and AUIPC.
+
+    StateMachine: process(i_clk)
+        variable id      : issue_id_t := 0;
+        variable rs1_hzd : issue_id_t := -1;
+        variable rs2_hzd : issue_id_t := -1;
+    begin
+        if rising_edge(i_clk) then
+            if (i_resetn = '0') then
+                
+            else
+                if (i_status.execute.stall_reason /= NOT_STALLED or 
+                        i_status.memaccess.stall_reason /= NOT_STALLED or 
+                            i_status.writeback.stall_reason /= NOT_STALLED) then
+                    -- If anything in the status is stalled, we need to not accept any further instructions.
+                    cpu_ready <= '0';
+                    
+                    -- However, if we said previously we were accepting instructions, and we now have a new
+                    -- instruction, we cannot just drop this instruction. Store this stalled instruction in
+                    -- a register, and we will provide it when the stall clears.
+                    if (i_valid = '1' and cpu_ready = '1') then
+                        stalled <= (
+                            id           => id,
+                            pc           => i_pc,
+                            instr        => contextual_decode(i_instr, i_status),
+                            valid        => '1',
+                            stall_reason => NOT_STALLED,
+                            rs1_hzd      => rs1_hzd,
+                            rs2_hzd      => rs2_hzd
+                        );
+
+                        -- Be sure to increment the issued id, since even though we did
+                        -- not issue yet, we did practically prepare the next issued instruction.
+                        if (id < cMaxId) then
+                            id := id + 1;
+                        else
+                            id := 0;
+                        end if;
+                    end if;
+                else
+                    -- If we have a stalled instruction, 
+                    if (stalled.valid = '1') then
+                        -- Since we have a stalled instruction, the cpu should never be ready since
+                        -- that puts us at risk of dropping an instruction.
+                        assert cpu_ready = '0' 
+                            report "ControlEngine::StateMachine: We should have had the cpu indicated as not ready." 
+                            severity failure;
+                        stalled.valid <= '0';
+                        cpu_ready     <= '1';
+                        o_issued      <= stalled;
+                    elsif (i_valid = '1' and cpu_ready = '1') then
+                        o_issued <= stage_status_t'(
+                            id           => id,
+                            pc           => i_pc,
+                            instr        => contextual_decode(i_instr, i_status),
+                            valid        => '1',
+                            stall_reason => NOT_STALLED,
+                            rs1_hzd      => rs1_hzd,
+                            rs2_hzd      => rs2_hzd
+                        );
+    
+                        if (id < cMaxId) then
+                            id := id + 1;
+                        else
+                            id := 0;
+                        end if;
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process StateMachine;
     
 end architecture rtl;

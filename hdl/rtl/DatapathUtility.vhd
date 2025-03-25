@@ -11,7 +11,8 @@ library ndsmd_riscv;
 
 package DatapathUtility is
     
-    subtype issue_id_t is integer range -1 to 63;
+    constant cMaxId : integer := 63;
+    subtype issue_id_t is integer range -1 to cMaxId;
     type stall_reason_t is (NOT_STALLED, MEMORY_STALL, HAZARD_STALL, EXECUTION_STALL);
 
     type stage_status_t is record

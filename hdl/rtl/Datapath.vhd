@@ -90,8 +90,12 @@ entity Datapath is
 end entity Datapath;
 
 architecture rtl of Datapath is
-    signal alu_res : std_logic_vector(31 downto 0) := (others => '0');
-    signal mext_res : std_logic_vector(31 downto 0) := (others => '0');
+    signal opA        : std_logic_vector(31 downto 0) := (others => '0');
+    signal opB        : std_logic_vector(31 downto 0) := (others => '0');
+    signal alu_res    : std_logic_vector(31 downto 0) := (others => '0');
+    signal eq_res     : std_logic := '0';
+    signal slt_res    : std_logic := '0';
+    signal mext_res   : std_logic_vector(31 downto 0) := (others => '0');
     signal mext_valid : std_logic := '0';
 
     type execute_stage_t is record
@@ -102,36 +106,46 @@ architecture rtl of Datapath is
     signal exec : execute_stage_t;
 begin
     
-    -- eRegisters : entity ndsmd_riscv.RegisterFile
-    -- port map (
-    --     i_clk    => i_clk,
-    --     i_resetn => i_resetn,
+    eRegisters : entity ndsmd_riscv.RegisterFile
+    port map (
+        i_clk    => i_clk,
+        i_resetn => i_resetn,
 
-    --     i_rs1 => ,
-    --     o_opA => ,
+        i_rs1 => i_issued.instr.base.rs1,
+        o_opA => opA,
 
-    --     i_rs2 => ,
-    --     o_opB => ,
+        i_rs2 => i_issued.instr.base.rs2,
+        o_opB => opB,
 
-    --     i_rd    => ,
-    --     i_res   => ,
-    --     i_valid => ,
-    -- );
+        i_rd    => "00000",
+        i_res   => x"00000000",
+        i_valid => '0'
+    );
 
-    -- eAlu : entity ndsmd_riscv.IntegerAlu
-    -- port map (
-    --     i_decoded => ,
-    --     i_opA     => ,
-    --     i_opB     => ,
+    eAlu : entity ndsmd_riscv.IntegerAlu
+    port map (
+        i_decoded => i_issued.instr,
+        i_opA     => opA,
+        i_opB     => opB,
 
-    --     o_res => ,
-    --     o_eq  => 
-    -- );
+        o_res => alu_res,
+        o_eq  => eq_res
+    );
 
-    -- eMext : entity ndsmd_riscv.MExtension
-    -- port map (
+    slt_res <= alu_res(0);
 
-    -- );
+    eMext : entity ndsmd_riscv.MExtension
+    port map (
+        i_clk    => i_clk,
+        i_resetn => i_resetn,
+
+        i_decoded => i_issued.instr,
+        i_opA     => opA,
+        i_opB     => opB,
+
+        o_res   => mext_res,
+        o_valid => mext_valid
+    );
 
     ExecuteStage: process(i_clk)
     begin
