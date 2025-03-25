@@ -90,7 +90,16 @@ entity Datapath is
 end entity Datapath;
 
 architecture rtl of Datapath is
-    
+    signal alu_res : std_logic_vector(31 downto 0) := (others => '0');
+    signal mext_res : std_logic_vector(31 downto 0) := (others => '0');
+    signal mext_valid : std_logic := '0';
+
+    type execute_stage_t is record
+        status   : stage_status_t;
+        alu_res  : std_logic_vector(31 downto 0);
+        mext_res : std_logic_vector(31 downto 0);
+    end record execute_stage_t;
+    signal exec : execute_stage_t;
 begin
     
     -- eRegisters : entity ndsmd_riscv.RegisterFile
@@ -124,36 +133,39 @@ begin
 
     -- );
 
-    -- ExecuteStage: process(i_clk)
-    -- begin
-    --     if rising_edge(i_clk) then
-    --         if (i_resetn = '0') then
-    --             exec_res <= (others => '0');
-    --         else
-    --             -- If the issued instruction is valid, and we're not stalled, 
-    --             -- then we can accept a new instruction.
-    --             if (i_issued.valid = '1' and execute_status.stall_reason = NOT_STALLED) then
-    --                 execute_status <= i_issued;
+    ExecuteStage: process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_resetn = '0') then
+                exec.alu_res  <= (others => '0');
+                exec.mext_res <= (others => '0');
+                exec.status.valid        <= '0';
+                exec.status.stall_reason <= NOT_STALLED;
+            else
+                -- If the issued instruction is valid, and we're not stalled, 
+                -- then we can accept a new instruction.
+                if (i_issued.valid = '1' and exec.status.stall_reason = NOT_STALLED) then
+                    exec.status <= i_issued;
 
-    --                 -- If it's the ALU, the instruction is done already, so grab the ALU
-    --                 -- result and move on.
-    --                 if (i_issued.decoded.unit = ALU) then
-    --                     exec_res <= alu_res;
-    --                 elsif (i_issued.decoded.unit = MEXT) then
-    --                     -- However, if it's the MEXT, we need to stall until the MEXT is done.
-    --                     execute_status.stall_reason <= EXECUTION_STALL;
-    --                 end if;
-    --             elsif (execute_status.stall_reason = EXECUTION_STALL) then
-    --                 -- We would only be here if there's an MEXT instruction running. Wait until the
-    --                 -- MEXT instruction finishes.
-    --                 if (mext_valid = '1') then
-    --                     exec_res <= mext_res;
-    --                     execute_status.stall_reason <= NOT_STALLED;
-    --                 end if;
-    --             end if;
-    --         end if;
-    --     end if;
-    -- end process ExecuteStage;
+                    -- If it's the ALU, the instruction is done already, so grab the ALU
+                    -- result and move on.
+                    if (i_issued.instr.unit = ALU) then
+                        exec.alu_res <= alu_res;
+                    elsif (i_issued.instr.unit = MEXT) then
+                        -- However, if it's the MEXT, we need to stall until the MEXT is done.
+                        exec.status.stall_reason <= EXECUTION_STALL;
+                    end if;
+                elsif (exec.status.stall_reason = EXECUTION_STALL) then
+                    -- We would only be here if there's an MEXT instruction running. Wait until the
+                    -- MEXT instruction finishes.
+                    if (mext_valid = '1') then
+                        exec.mext_res <= mext_res;
+                        exec.status.stall_reason <= NOT_STALLED;
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process ExecuteStage;
 
     -- eMemoryUnit : entity ndsmd_riscv.MemoryAccessUnit
     -- port map (
