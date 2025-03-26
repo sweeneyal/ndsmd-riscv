@@ -339,6 +339,8 @@ begin
     -- An idea is to precompute the branch and jump PCs here (with the exception of JALR, not sure what to do here.)
     -- This same logic can be used for LUI and AUIPC.
 
+    o_cpu_ready <= cpu_ready;
+
     StateMachine: process(i_clk)
         variable id      : issue_id_t := 0;
         variable rs1_hzd : issue_id_t := -1;
@@ -405,6 +407,10 @@ begin
                         else
                             id := 0;
                         end if;
+                    else
+                        -- We have neither a stalled instruction, nor need to stall
+                        -- request a new instruction from the prefetcher
+                        cpu_ready <= '1';
                     end if;
                 end if;
             end if;

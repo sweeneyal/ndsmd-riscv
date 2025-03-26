@@ -25,6 +25,10 @@ library universal;
 
 library simtools;
 
+library ndsmd_riscv;
+    use ndsmd_riscv.InstructionUtility.all;
+    use ndsmd_riscv.DatapathUtility.all;
+
 library tb_ndsmd_riscv;
     use tb_ndsmd_riscv.ControlEngine_Utility.all;
 
@@ -65,12 +69,113 @@ begin
         variable rand : RandomPType;
         variable idx  : natural := 0;
         variable rand_wait : natural := 0;
+        variable pc_update : boolean := false;
     begin
         test_runner_setup(runner, nested_runner_cfg);
   
         while test_suite loop
             if run("t_nominal") then
                 info("Running maxthroughput test");
+                stimuli.resetn <= '0';
+                stimuli.pc     <= (others => '0');
+                stimuli.valid  <= '0';
+                stimuli.instr  <= decode(x"00000000");
+                stimuli.status <= datapath_status_t'(
+                    execute   => stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base         => decode(x"00000000"),
+                            unit         => ALU,
+                            operation    => NULL_OP,
+                            source1      => REGISTERS,
+                            is_immed     => false,
+                            immediate    => (others => '0'),
+                            is_memory    => false,
+                            memoperation => LOAD_BYTE,
+                            destination  => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    ),
+                    memaccess => stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base         => decode(x"00000000"),
+                            unit         => ALU,
+                            operation    => NULL_OP,
+                            source1      => REGISTERS,
+                            is_immed     => false,
+                            immediate    => (others => '0'),
+                            is_memory    => false,
+                            memoperation => LOAD_BYTE,
+                            destination  => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    ),
+                    writeback => stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base         => decode(x"00000000"),
+                            unit         => ALU,
+                            operation    => NULL_OP,
+                            source1      => REGISTERS,
+                            is_immed     => false,
+                            immediate    => (others => '0'),
+                            is_memory    => false,
+                            memoperation => LOAD_BYTE,
+                            destination  => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    )
+                );
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                stimuli.resetn <= '1';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                check(i_responses.cpu_ready = '1');
+
+                for ii in 0 to 100 loop
+                    if (i_responses.cpu_ready = '1') then
+                        stimuli.instr <= decode(
+                            generate_instruction(
+                                -1, 
+                                rand.RandInt(0, 100000),
+                                rand.RandInt(0, 100000)
+                            )
+                        );
+                        stimuli.valid <= '1';
+                        pc_update := true;
+                    else
+                        pc_update := false;
+                    end if;
+
+                    if (i_responses.issued.valid = '1') then
+                        stimuli.status.writeback <= stimuli.status.memaccess;
+                        stimuli.status.memaccess <= stimuli.status.execute;
+                        stimuli.status.execute   <= i_responses.issued;
+                    end if;
+
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+
+                    if (pc_update) then
+                        stimuli.pc <= stimuli.pc + 4;
+                    end if;
+                end loop;
                 
             elsif run("t_offnominal") then
                 info("Running bathtub delay with bathtub stall");
