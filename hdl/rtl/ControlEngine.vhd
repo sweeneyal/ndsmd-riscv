@@ -104,6 +104,7 @@ architecture rtl of ControlEngine is
                 -- instruction where there is no destination.
                 decoded.destination := REGISTERS;
                 decoded.is_immed    := true;
+                decoded.source2     := IMMEDIATE;
                 decoded.immediate   := std_logic_vector(resize(signed(instr.itype), 32));
 
                 -- Indicate the operation performed by the functional unit.
@@ -150,6 +151,7 @@ architecture rtl of ControlEngine is
                 end if;
 
                 decoded.is_immed  := false;
+                decoded.source2   := REGISTERS;
                 decoded.immediate := (others => '0');
 
                 -- Indicate the operation performed by the functional unit.
@@ -238,6 +240,7 @@ architecture rtl of ControlEngine is
                 decoded.unit      := ALU;
                 decoded.source1   := REGISTERS;
                 decoded.is_immed  := true;
+                decoded.source2   := IMMEDIATE;
                 if (instr.opcode = cStoreOpcode) then
                     decoded.destination := MEMORY;
                     decoded.immediate   := std_logic_vector(resize(signed(instr.stype), 32));
@@ -260,6 +263,7 @@ architecture rtl of ControlEngine is
                 -- perspective of the ALU, this is not an is_immed because it functionally
                 -- performs SLT, however, the branch does still use the immediate.
                 decoded.is_immed  := false;
+                decoded.source2   := REGISTERS;
                 decoded.immediate := std_logic_vector(resize(signed(instr.btype), 32));
 
                 -- For branches, we're using the ALU to check the comparison of 
@@ -283,6 +287,7 @@ architecture rtl of ControlEngine is
                 decoded.destination := REGISTERS;
 
                 decoded.is_immed  := true;
+                decoded.source2   := IMMEDIATE;
                 if (instr.opcode = cJumpOpcode) then
                     decoded.source1   := PROGRAM_COUNTER;
                     decoded.immediate := std_logic_vector(resize(signed(instr.jtype), 32));
@@ -317,7 +322,6 @@ architecture rtl of ControlEngine is
     begin
         -- Decode instruction into enums and booleans
         decoded.base := instr;
-        decoded.is_immed := is_immed(instr.opcode);
         decoded := enumify_instr(instr, decoded);
 
         -- Identify data hazards amongst in-flight instructions
@@ -326,7 +330,23 @@ architecture rtl of ControlEngine is
         -- (e.g. division) will therefore force the entire CPU to stall. Hence, why adding support for 
         -- tomasulo is invaluable.
 
+        if (decoded.source1 = REGISTERS) then
+            -- Check all stage statuses to see if another instruction
+            -- has the destination = decoded.base.rs1.
 
+            -- If there is one in execute or memaccess, we found a hazard.
+            -- Check the operation (e.g. is this a memory access instruction?)
+            -- to identify the desired behavior for the processor.
+        end if;
+
+        if (decoded.source2 = REGISTERS) then
+            -- Check all stage statuses to see if another instruction
+            -- has the destination = decoded.base.rs2.
+
+            -- If there is one in execute or memaccess, we found a hazard.
+            -- Check the operation (e.g. is this a memory access instruction?)
+            -- to identify the desired behavior for the processor.
+        end if;
 
 
         return decoded;

@@ -103,7 +103,7 @@ package InstructionUtility is
     -- Since we can either use a register operand, the program counter, or 
     -- another hardcoded zero for the first source, indicate the correct source.
     -- Typically, this is just the registers, but AUIPC, JAL, and LUI are the exception.
-    type source_t is (REGISTERS, PROGRAM_COUNTER, ZERO);
+    type source_t is (REGISTERS, PROGRAM_COUNTER, ZERO, IMMEDIATE);
 
     -- The destination of the instruction is either a register, memory, or it is a branch
     -- instruction where there is no destination.
@@ -117,8 +117,9 @@ package InstructionUtility is
         -- the specific operation performed for the functional unit
         operation : operation_t;
 
-        -- left-hand side operand fields
+        -- operand fields
         source1 : source_t;
+        source2 : source_t;
         
         -- immediate specific fields
         is_immed : boolean;
