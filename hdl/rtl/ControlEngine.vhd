@@ -55,8 +55,11 @@ entity ControlEngine is
         i_status : in datapath_status_t;
         -- next issued instruction
         o_issued : out stage_status_t;
-        -- indicator that the next issued instruction is valid
-        o_ivalid : out std_logic
+
+        -- new jump/branch program counter
+        o_pc : out unsigned(31 downto 0);
+        -- indicator that jump/branch pc is valid
+        o_pcwen : out std_logic
     );
 end entity ControlEngine;
 
@@ -343,7 +346,9 @@ begin
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
-                
+                stalled.valid  <= '0';
+                cpu_ready      <= '0';
+                o_issued.valid <= '0';
             else
                 if (i_status.execute.stall_reason /= NOT_STALLED or 
                         i_status.memaccess.stall_reason /= NOT_STALLED or 
