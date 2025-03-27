@@ -56,6 +56,8 @@ entity ControlEngine is
         -- next issued instruction
         o_issued : out stage_status_t;
 
+        -- branch condition indicator signals
+        i_slt_eq : in std_logic_vector(1 downto 0);
         -- new jump/branch program counter
         o_pc : out unsigned(31 downto 0);
         -- indicator that jump/branch pc is valid
@@ -349,8 +351,16 @@ architecture rtl of ControlEngine is
         return -1;
     end function;
 
-    signal stalled : stage_status_t;
-    signal cpu_ready : std_logic := '0';
+    signal stalled        : stage_status_t;
+    signal cpu_ready      : std_logic := '0';
+
+    type jump_type_t is (JAL, JALR, BRANCH);
+    type condition_t is (LESS_THAN, LESS_THAN_EQ, EQUAL, GREATER_THAN_EQ, GREATER_THAN);
+    type jb_engine_t is record
+        pc        : unsigned(31 downto 0);
+        jump_type : jump_type_t;
+        condition : condition_t;
+    end record jb_engine_t;
 begin
     
     -- An idea is to precompute the branch and jump PCs here (with the exception of JALR, not sure what to do here.)
@@ -381,15 +391,35 @@ begin
                     -- instruction, we cannot just drop this instruction. Store this stalled instruction in
                     -- a register, and we will provide it when the stall clears.
                     if (i_valid = '1' and cpu_ready = '1') then
+                        -- Decode the new instruction, adding in the additional enums.
+                        decoded := contextual_decode(i_instr);
+
                         stalled <= (
                             id           => id,
                             pc           => i_pc,
-                            instr        => contextual_decode(i_instr),
+                            instr        => decoded,
                             valid        => '1',
                             stall_reason => NOT_STALLED,
                             rs1_hzd      => -1, -- No point in finding the hazards right now since they may update before
                             rs2_hzd      => -1  -- this instruction gets issued.
                         );
+
+                        -- TODO: Finish this
+                        -- We need to add a jalr input port for the jalr address to pipe it through to
+                        -- the prefetcher.
+                        if (decoded.base.opcode = cJumpOpcode) then
+                            -- pc + jtype
+                            -- jump_branch_pc <= i_pc + decoded.immediate;
+                            -- can I go ahead and issue this pc update now with no consequences, despite the fact 
+                            -- that we're stalled?
+                        elsif (decoded.base.opcode = cBranchOpcode) then
+                            -- pc + btype
+                            -- jump_branch_pc <= i_pc + decoded.immediate;
+                            -- I have to wait for exec to complete on this instruction
+                            -- before I can issue this pc update.
+                        elsif (decoded.base.opcode = cBranchOpcode) then
+                            -- Indicate that we're going to jump whenever this guy finishes.
+                        end if;
 
                         -- Be sure to increment the issued id, since even though we did
                         -- not issue yet, we did practically prepare the next issued instruction.
