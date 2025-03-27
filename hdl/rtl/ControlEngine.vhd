@@ -314,42 +314,39 @@ architecture rtl of ControlEngine is
         return decoded;
     end function;
 
-    -- Contextual decoding performs more laborious decoding of the instruction into enums, as well as looks at the
-    -- context of what is currently occuring on the datapath before it issues the instruction. This allows data 
-    -- hazards to be identified early, functional units to be stalled for, etc.
-    function contextual_decode(instr : instruction_t; status : datapath_status_t) return decoded_instr_t is
+    -- Contextual decoding performs more laborious decoding of the instruction into enums, as well as any downstream
+    -- decoding.
+    function contextual_decode(instr : instruction_t) return decoded_instr_t is
         variable decoded : decoded_instr_t;
     begin
         -- Decode instruction into enums and booleans
         decoded.base := instr;
         decoded := enumify_instr(instr, decoded);
+        return decoded;
+    end function;
 
+    function find_hazards(source : source_t; rsx : std_logic_vector(4 downto 0); status : datapath_status_t) return issue_id_t is
+    begin
         -- Identify data hazards amongst in-flight instructions
         -- Note: this version is assuming that we are not operating as a tomasulo processor with numerous
         -- available functional units. We're also assuming that any instruction that stalls the processor
         -- (e.g. division) will therefore force the entire CPU to stall. Hence, why adding support for 
         -- tomasulo is invaluable.
 
-        if (decoded.source1 = REGISTERS) then
+        if (source = REGISTERS and rsx /= "00000") then
             -- Check all stage statuses to see if another instruction
             -- has the destination = decoded.base.rs1.
 
-            -- If there is one in execute or memaccess, we found a hazard.
-            -- Check the operation (e.g. is this a memory access instruction?)
-            -- to identify the desired behavior for the processor.
+            if ((status.execute.instr.base.rd = rsx) and status.execute.instr.destination = REGISTERS) then
+                return status.execute.id;
+            elsif ((status.memaccess.instr.base.rd = rsx) and status.memaccess.instr.destination = REGISTERS) then
+                return status.memaccess.id;
+            end if;
         end if;
 
-        if (decoded.source2 = REGISTERS) then
-            -- Check all stage statuses to see if another instruction
-            -- has the destination = decoded.base.rs2.
-
-            -- If there is one in execute or memaccess, we found a hazard.
-            -- Check the operation (e.g. is this a memory access instruction?)
-            -- to identify the desired behavior for the processor.
-        end if;
-
-
-        return decoded;
+        -- A value of -1 means no hazard.
+        -- Note: this does not identify when the hazarded value becomes available. That is a different functionality.
+        return -1;
     end function;
 
     signal stalled : stage_status_t;
@@ -365,6 +362,8 @@ begin
         variable id      : issue_id_t := 0;
         variable rs1_hzd : issue_id_t := -1;
         variable rs2_hzd : issue_id_t := -1;
+
+        variable decoded : decoded_instr_t;
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
@@ -385,11 +384,11 @@ begin
                         stalled <= (
                             id           => id,
                             pc           => i_pc,
-                            instr        => contextual_decode(i_instr, i_status),
+                            instr        => contextual_decode(i_instr),
                             valid        => '1',
                             stall_reason => NOT_STALLED,
-                            rs1_hzd      => rs1_hzd,
-                            rs2_hzd      => rs2_hzd
+                            rs1_hzd      => -1, -- No point in finding the hazards right now since they may update before
+                            rs2_hzd      => -1  -- this instruction gets issued.
                         );
 
                         -- Be sure to increment the issued id, since even though we did
@@ -405,23 +404,81 @@ begin
                     if (stalled.valid = '1') then
                         -- Since we have a stalled instruction, the cpu should never be ready since
                         -- that puts us at risk of dropping an instruction.
-                        assert cpu_ready = '0' 
+                        assert cpu_ready = '0'
                             report "ControlEngine::StateMachine: We should have had the cpu indicated as not ready." 
                             severity failure;
-                        stalled.valid <= '0';
-                        cpu_ready     <= '1';
-                        o_issued      <= stalled;
+                        
+                        -- Pass the stalled instruction to the datapath
+                        o_issued <= stalled;
+
+                        -- Identify any current hazards in the datapath
+                        rs1_hzd := find_hazards(stalled.instr.source1, stalled.instr.base.rs1, i_status);
+                        rs2_hzd := find_hazards(stalled.instr.source2, stalled.instr.base.rs2, i_status);
+
+                        -- Link the hazards to the issued instruction.
+                        o_issued.rs1_hzd <= rs1_hzd;
+                        o_issued.rs2_hzd <= rs2_hzd;
+
+                        -- Temporary: if we have any hazards, we're going to stall until those hazards finish.
+                        -- This is to avoid needing complex data hazard handling logic, also known as an excuse
+                        -- in order to meet deadlines.
+                        if (rs1_hzd = -1 and rs2_hzd = -1) then
+                            o_issued.valid <= '1';
+                            stalled.valid  <= '0';
+                            cpu_ready      <= '1';
+                        else
+                            o_issued.valid <= '0';
+                            stalled.valid  <= '1';
+                            cpu_ready      <= '0';
+                        end if;
                     elsif (i_valid = '1' and cpu_ready = '1') then
+                        -- Decode the new instruction, adding in the additional enums.
+                        decoded := contextual_decode(i_instr);
+
+                        -- Go ahead and fill out the issued output, and set it to not valid.
                         o_issued <= stage_status_t'(
                             id           => id,
                             pc           => i_pc,
-                            instr        => contextual_decode(i_instr, i_status),
-                            valid        => '1',
+                            instr        => decoded,
+                            valid        => '0',
                             stall_reason => NOT_STALLED,
-                            rs1_hzd      => rs1_hzd,
-                            rs2_hzd      => rs2_hzd
+                            rs1_hzd      => -1, -- These values will be overwritten by the below function calls.
+                            rs2_hzd      => -1
                         );
+
+                        -- Also do the same for the stalled register, and set it to not valid.
+                        stalled <= stage_status_t'(
+                            id           => id,
+                            pc           => i_pc,
+                            instr        => decoded,
+                            valid        => '0',
+                            stall_reason => NOT_STALLED,
+                            rs1_hzd      => -1, -- These values will be overwritten by the below function calls.
+                            rs2_hzd      => -1
+                        );
+
+                        -- Identify the hazards of the instruction.
+                        rs1_hzd := find_hazards(decoded.source1, decoded.base.rs1, i_status);
+                        rs2_hzd := find_hazards(decoded.source2, decoded.base.rs2, i_status);
+
+                        -- Link the hazards to the issued instruction.
+                        o_issued.rs1_hzd <= rs1_hzd;
+                        o_issued.rs2_hzd <= rs2_hzd;
+
+                        -- Temporary: if we have any hazards, we're going to stall until those hazards finish.
+                        -- This is to avoid needing complex data hazard handling logic, also known as an excuse
+                        -- in order to meet deadlines.
+                        if (rs1_hzd = -1 and rs2_hzd = -1) then
+                            o_issued.valid <= '1';
+                            stalled.valid  <= '0';
+                            cpu_ready      <= '1';
+                        else
+                            o_issued.valid <= '0';
+                            stalled.valid  <= '1';
+                            cpu_ready      <= '0';
+                        end if;
     
+                        -- Since we have now issued/stalled this instruction, we need to move on to the next id.
                         if (id < cMaxId) then
                             id := id + 1;
                         else

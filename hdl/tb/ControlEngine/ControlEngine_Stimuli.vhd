@@ -151,7 +151,7 @@ begin
                 wait for 100 ps;
                 check(i_responses.cpu_ready = '1');
 
-                for ii in 0 to 100 loop
+                for ii in 0 to 1000 loop
                     if (i_responses.cpu_ready = '1') then
                         stimuli.instr <= decode(
                             generate_instruction(
@@ -166,10 +166,31 @@ begin
                         pc_update := false;
                     end if;
 
+                    stimuli.status.writeback <= stimuli.status.memaccess;
+                    stimuli.status.memaccess <= stimuli.status.execute;
                     if (i_responses.issued.valid = '1') then
-                        stimuli.status.writeback <= stimuli.status.memaccess;
-                        stimuli.status.memaccess <= stimuli.status.execute;
-                        stimuli.status.execute   <= i_responses.issued;
+                        stimuli.status.execute <= i_responses.issued;
+                    else
+                        stimuli.status.execute <= stage_status_t'(
+                            id           => -1,
+                            pc           => (others => '0'),
+                            instr        => decoded_instr_t'(
+                                base         => decode(x"00000000"),
+                                unit         => ALU,
+                                operation    => NULL_OP,
+                                source1      => REGISTERS,
+                                source2      => REGISTERS,
+                                is_immed     => false,
+                                immediate    => (others => '0'),
+                                is_memory    => false,
+                                memoperation => LOAD_BYTE,
+                                destination  => REGISTERS
+                            ),
+                            valid        => '0',
+                            stall_reason => NOT_STALLED,
+                            rs1_hzd      => -1,
+                            rs2_hzd      => -1
+                        );
                     end if;
 
                     wait until rising_edge(clk);
