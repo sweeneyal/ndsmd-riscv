@@ -351,8 +351,9 @@ architecture rtl of ControlEngine is
         return -1;
     end function;
 
-    signal stalled        : stage_status_t;
-    signal cpu_ready      : std_logic := '0';
+    signal backed_up  : std_logic := '0';
+    signal stalled    : stage_status_t;
+    signal cpu_ready  : std_logic := '0';
 
     type jump_type_t is (JAL, JALR, BRANCH);
     type condition_t is (LESS_THAN, LESS_THAN_EQ, EQUAL, GREATER_THAN_EQ, GREATER_THAN);

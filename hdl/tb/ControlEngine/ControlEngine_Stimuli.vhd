@@ -204,7 +204,190 @@ begin
                 
             elsif run("t_offnominal") then
                 info("Running bathtub delay with bathtub stall");
-                
+                stimuli.resetn <= '0';
+                stimuli.pc     <= (others => '0');
+                stimuli.valid  <= '0';
+                stimuli.instr  <= decode(x"00000000");
+                stimuli.slt_eq <= "00";
+                stimuli.status <= datapath_status_t'(
+                    execute   => stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base         => decode(x"00000000"),
+                            unit         => ALU,
+                            operation    => NULL_OP,
+                            source1      => REGISTERS,
+                            source2      => REGISTERS,
+                            is_immed     => false,
+                            immediate    => (others => '0'),
+                            is_memory    => false,
+                            memoperation => LOAD_BYTE,
+                            destination  => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    ),
+                    memaccess => stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base         => decode(x"00000000"),
+                            unit         => ALU,
+                            operation    => NULL_OP,
+                            source1      => REGISTERS,
+                            source2      => REGISTERS,
+                            is_immed     => false,
+                            immediate    => (others => '0'),
+                            is_memory    => false,
+                            memoperation => LOAD_BYTE,
+                            destination  => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    ),
+                    writeback => stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base         => decode(x"00000000"),
+                            unit         => ALU,
+                            operation    => NULL_OP,
+                            source1      => REGISTERS,
+                            source2      => REGISTERS,
+                            is_immed     => false,
+                            immediate    => (others => '0'),
+                            is_memory    => false,
+                            memoperation => LOAD_BYTE,
+                            destination  => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    )
+                );
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                stimuli.resetn <= '1';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                check(i_responses.cpu_ready = '1');
+
+                for ii in 0 to 1000 loop
+                    if (i_responses.cpu_ready = '1') then
+                        stimuli.instr <= decode(
+                            generate_instruction(
+                                -1, 
+                                rand.RandInt(0, 100000),
+                                rand.RandInt(0, 100000)
+                            )
+                        );
+                        stimuli.valid <= '1';
+                        pc_update := true;
+                    else
+                        pc_update := false;
+                    end if;
+
+                    if (rand.RandInt(1,6) = 1) then
+                        -- We're going to randomly stall the memaccess stage.
+                        stimuli.status.writeback <= stage_status_t'(
+                            id           => -1,
+                            pc           => (others => '0'),
+                            instr        => decoded_instr_t'(
+                                base         => decode(x"00000000"),
+                                unit         => ALU,
+                                operation    => NULL_OP,
+                                source1      => REGISTERS,
+                                source2      => REGISTERS,
+                                is_immed     => false,
+                                immediate    => (others => '0'),
+                                is_memory    => false,
+                                memoperation => LOAD_BYTE,
+                                destination  => REGISTERS
+                            ),
+                            valid        => '0',
+                            stall_reason => NOT_STALLED,
+                            rs1_hzd      => -1,
+                            rs2_hzd      => -1
+                        );
+
+                        stimuli.status.memaccess.stall_reason <= MEMORY_STALL;
+                    elsif (rand.RandInt(1,6) = 2) then
+                        -- We're going to randomly stall the execute stage.
+                        stimuli.status.writeback <= stimuli.status.memaccess;
+                        stimuli.status.memaccess <= stage_status_t'(
+                            id           => -1,
+                            pc           => (others => '0'),
+                            instr        => decoded_instr_t'(
+                                base         => decode(x"00000000"),
+                                unit         => ALU,
+                                operation    => NULL_OP,
+                                source1      => REGISTERS,
+                                source2      => REGISTERS,
+                                is_immed     => false,
+                                immediate    => (others => '0'),
+                                is_memory    => false,
+                                memoperation => LOAD_BYTE,
+                                destination  => REGISTERS
+                            ),
+                            valid        => '0',
+                            stall_reason => NOT_STALLED,
+                            rs1_hzd      => -1,
+                            rs2_hzd      => -1
+                        );
+                        stimuli.status.execute.stall_reason <= EXECUTION_STALL;
+
+                        stimuli.status.writeback.stall_reason <= NOT_STALLED;
+                    else
+                        stimuli.status.writeback <= stimuli.status.memaccess;
+                        stimuli.status.memaccess <= stimuli.status.execute;
+
+                        stimuli.status.writeback.stall_reason <= NOT_STALLED;
+                        stimuli.status.memaccess.stall_reason <= NOT_STALLED;
+                        stimuli.status.execute.stall_reason <= NOT_STALLED;
+                    end if;
+
+                    if (i_responses.issued.valid = '1') then
+                        stimuli.status.execute <= i_responses.issued;
+                    else
+                        stimuli.status.execute <= stage_status_t'(
+                            id           => -1,
+                            pc           => (others => '0'),
+                            instr        => decoded_instr_t'(
+                                base         => decode(x"00000000"),
+                                unit         => ALU,
+                                operation    => NULL_OP,
+                                source1      => REGISTERS,
+                                source2      => REGISTERS,
+                                is_immed     => false,
+                                immediate    => (others => '0'),
+                                is_memory    => false,
+                                memoperation => LOAD_BYTE,
+                                destination  => REGISTERS
+                            ),
+                            valid        => '0',
+                            stall_reason => NOT_STALLED,
+                            rs1_hzd      => -1,
+                            rs2_hzd      => -1
+                        );
+                    end if;
+
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+
+                    if (pc_update) then
+                        stimuli.pc <= stimuli.pc + 4;
+                    end if;
+                end loop;
+
+                check(false, "Not yet done: need to add a ready signal that indicates issued instruction has been accepted.");
             end if;
         end loop;
     
