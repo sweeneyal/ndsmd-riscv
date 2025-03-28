@@ -351,7 +351,6 @@ architecture rtl of ControlEngine is
         return -1;
     end function;
 
-    signal backed_up  : std_logic := '0';
     signal stalled    : stage_status_t;
     signal cpu_ready  : std_logic := '0';
 

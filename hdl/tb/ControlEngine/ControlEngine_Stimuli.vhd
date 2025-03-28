@@ -352,31 +352,31 @@ begin
                         stimuli.status.writeback.stall_reason <= NOT_STALLED;
                         stimuli.status.memaccess.stall_reason <= NOT_STALLED;
                         stimuli.status.execute.stall_reason <= NOT_STALLED;
-                    end if;
 
-                    if (i_responses.issued.valid = '1') then
-                        stimuli.status.execute <= i_responses.issued;
-                    else
-                        stimuli.status.execute <= stage_status_t'(
-                            id           => -1,
-                            pc           => (others => '0'),
-                            instr        => decoded_instr_t'(
-                                base         => decode(x"00000000"),
-                                unit         => ALU,
-                                operation    => NULL_OP,
-                                source1      => REGISTERS,
-                                source2      => REGISTERS,
-                                is_immed     => false,
-                                immediate    => (others => '0'),
-                                is_memory    => false,
-                                memoperation => LOAD_BYTE,
-                                destination  => REGISTERS
-                            ),
-                            valid        => '0',
-                            stall_reason => NOT_STALLED,
-                            rs1_hzd      => -1,
-                            rs2_hzd      => -1
-                        );
+                        if (i_responses.issued.valid = '1') then
+                            stimuli.status.execute <= i_responses.issued;
+                        else
+                            stimuli.status.execute <= stage_status_t'(
+                                id           => -1,
+                                pc           => (others => '0'),
+                                instr        => decoded_instr_t'(
+                                    base         => decode(x"00000000"),
+                                    unit         => ALU,
+                                    operation    => NULL_OP,
+                                    source1      => REGISTERS,
+                                    source2      => REGISTERS,
+                                    is_immed     => false,
+                                    immediate    => (others => '0'),
+                                    is_memory    => false,
+                                    memoperation => LOAD_BYTE,
+                                    destination  => REGISTERS
+                                ),
+                                valid        => '0',
+                                stall_reason => NOT_STALLED,
+                                rs1_hzd      => -1,
+                                rs2_hzd      => -1
+                            );
+                        end if;
                     end if;
 
                     wait until rising_edge(clk);
@@ -386,8 +386,6 @@ begin
                         stimuli.pc <= stimuli.pc + 4;
                     end if;
                 end loop;
-
-                check(false, "Not yet done: need to add a ready signal that indicates issued instruction has been accepted.");
             end if;
         end loop;
     
