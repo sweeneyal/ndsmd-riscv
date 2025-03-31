@@ -42,6 +42,7 @@ for file in files:
 
 tb.test_bench("tb_InstrPrefetcher").scan_tests_from_file("./hdl/tb/InstrPrefetcher/InstrPrefetcher_Stimuli.vhd")
 tb.test_bench("tb_ControlEngine").scan_tests_from_file("./hdl/tb/ControlEngine/ControlEngine_Stimuli.vhd")
+tb.test_bench("tb_ProcessorCore").scan_tests_from_file("./hdl/tb/ProcessorCore/ProcessorCore_Stimuli.vhd")
 
 def encode(tb_cfg):
     return ", ".join(["%s:%s" % (key, str(tb_cfg[key])) for key in tb_cfg])

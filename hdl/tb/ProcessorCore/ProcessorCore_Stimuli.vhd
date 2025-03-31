@@ -1,0 +1,89 @@
+-----------------------------------------------------------------------------------------------------------------------
+-- entity: ProcessorCore_Stimuli
+--
+-- library: tb_ndsmd_riscv
+-- 
+-- signals:
+--      o_stimuli   : 
+--
+-- description:
+--      
+-----------------------------------------------------------------------------------------------------------------------
+library vunit_lib;
+    context vunit_lib.vunit_context;
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+
+library osvvm;
+    use osvvm.TbUtilPkg.all;
+    use osvvm.RandomPkg.all;
+
+library universal;
+    use universal.CommonFunctions.all;
+
+library simtools;
+
+library tb_ndsmd_riscv;
+    use tb_ndsmd_riscv.ProcessorCore_Utility.all;
+
+entity ProcessorCore_Stimuli is
+    generic (nested_runner_cfg : string);
+    port (
+        o_stimuli : out stimuli_t;
+        -- we have to see the responses to know when to respond to requests
+        i_responses : in responses_t
+    );
+end entity ProcessorCore_Stimuli;
+
+architecture rtl of ProcessorCore_Stimuli is
+    constant cPeriod : time := 10 ns;
+
+    signal clk : std_logic := '0';
+    signal stimuli : stimuli_t;
+
+    -- procedure stimulate_memory_interface is
+    -- begin
+    --     for ii in 0 to 10000 loop
+    --         wait on i_responses;
+    --         if (i_responses.instr_ren = '1') then
+    --             -- For ease of testing, remap the requested PC as the data.
+    --             stimuli.instr_rdata  <= transport i_responses.instr_addr after cPeriod;
+    --             -- Set rvalid high after a clock cycle, then clear it the next clock cycle.
+    --             stimuli.instr_rvalid <= transport '1' after cPeriod, '0' after 2 * cPeriod;
+    --         end if;
+    --     end loop;
+    -- end procedure;
+begin
+    
+    o_stimuli <= stimuli;
+    stimuli.clk <= clk;
+
+    CreateClock(clk=>clk, period=>cPeriod);
+
+    -- The Stimuli entity in this testbench is designed to emulate instruction memory,
+    -- because it generates valid instructions based on random numbers and the CPU 
+    -- interprets these instructions as they are given, with the assumption of correct
+    -- instruction ordering.
+
+    TestRunner : process
+        variable rand : RandomPType;
+        variable idx  : natural := 0;
+        variable rand_wait : natural := 0;
+    begin
+        test_runner_setup(runner, nested_runner_cfg);
+  
+        while test_suite loop
+            if run("t_max_throughput") then
+                info("Running maxthroughput test");
+                
+            end if;
+        end loop;
+    
+        test_runner_cleanup(runner);
+    end process;
+
+    test_runner_watchdog(runner, 2 ms);
+    
+end architecture rtl;
