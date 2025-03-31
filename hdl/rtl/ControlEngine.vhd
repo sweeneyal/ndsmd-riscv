@@ -70,7 +70,7 @@ architecture rtl of ControlEngine is
     -- Enumification attempts to recode instructions into a set of human-readable enums that will be handled
     -- by the synthesis tool and further optimized during synthesis. This helps make downstream RTL easier to
     -- read, and therefore easier to debug.
-    function enumify_instr(instr : instruction_t; res : decoded_instr_t) return decoded_instr_t is
+    function enumify_instr(instr : instruction_t; pc : unsigned(31 downto 0); res : decoded_instr_t) return decoded_instr_t is
         variable decoded : decoded_instr_t;
     begin
         decoded := res;
@@ -266,7 +266,23 @@ architecture rtl of ControlEngine is
                 -- performs SLT, however, the branch does still use the immediate.
                 decoded.is_immed  := false;
                 decoded.source2   := REGISTERS;
-                decoded.immediate := std_logic_vector(resize(signed(instr.btype), 32));
+
+                -- We precompute the new PC here since we have everything we need to do that.
+                decoded.is_jump_branch := BRANCH;
+                decoded.new_pc         := pc + unsigned(resize(signed(instr.btype), 32));
+                -- Also, indicate the condition we're looking for for the branch.
+                case instr.funct3 is
+                    when "000" =>
+                        decoded.condition := EQUAL;
+                    when "001" =>
+                        decoded.condition := NOT_EQUAL;
+                    when "100" | "101" =>
+                        decoded.condition := LESS_THAN;
+                    when "110" | "111" =>
+                        decoded.condition := GREATER_THAN_EQ;
+                    when others =>
+                        assert false report "ControlEngine::contextual_decode: Malformed Instruction" severity failure;
+                end case;
 
                 -- For branches, we're using the ALU to check the comparison of 
                 -- regs[rs1] and regs[rs2], so we use the SLT or SLTU operation.
@@ -291,10 +307,24 @@ architecture rtl of ControlEngine is
                 decoded.is_immed  := true;
                 decoded.source2   := IMMEDIATE;
                 if (instr.opcode = cJumpOpcode) then
-                    decoded.source1   := PROGRAM_COUNTER;
-                    decoded.immediate := std_logic_vector(resize(signed(instr.jtype), 32));
+                    -- We precompute the new PC here since we have everything we need to do that.
+                    -- Meanwhile, since JAL also returns the post-jump PC, produce that by changing the source
+                    -- and setting the immediate to 4, so that the ALU will produce this value.
+                    decoded.source1        := PROGRAM_COUNTER;
+                    decoded.new_pc         := pc + unsigned(resize(signed(instr.jtype), 32));
+                    decoded.is_jump_branch := JAL;
+                    decoded.immediate      := std_logic_vector(to_unsigned(4, 32));
                 elsif (instr.opcode = cJumpRegOpcode) then
-                    decoded.source1   := REGISTERS;
+                    -- JALR is a thorn in my side. In this case, we need to use a register plus the itype
+                    -- immediate to compute the new pc, but we also still need to compute the post-jump PC.
+                    -- Compute the post-jump PC here, and configure the ALU to produce the new PC, and we'll
+                    -- uncross the wires at the end of execute.
+
+                    -- Note to self: we could add an additional port to the register file to index and grab rs1,
+                    -- but we would need to be careful of hazards.
+                    decoded.source1        := REGISTERS;
+                    decoded.new_pc         := pc + 4;
+                    decoded.is_jump_branch := JALR;
                     decoded.immediate := std_logic_vector(resize(signed(instr.itype), 32));
                 elsif (instr.opcode = cAuipcOpcode) then
                     decoded.source1   := PROGRAM_COUNTER;
@@ -318,12 +348,27 @@ architecture rtl of ControlEngine is
 
     -- Contextual decoding performs more laborious decoding of the instruction into enums, as well as any downstream
     -- decoding.
-    function contextual_decode(instr : instruction_t) return decoded_instr_t is
+    function contextual_decode(instr : instruction_t; pc : unsigned(31 downto 0)) return decoded_instr_t is
         variable decoded : decoded_instr_t;
     begin
         -- Decode instruction into enums and booleans
+        decoded := decoded_instr_t'(
+            base           => decode(x"00000000"),
+            unit           => ALU,
+            operation      => NULL_OP,
+            source1        => REGISTERS,
+            source2        => REGISTERS,
+            is_immed       => false,
+            immediate      => (others => '0'),
+            is_memory      => false,
+            memoperation   => LOAD_BYTE,
+            is_jump_branch => NOT_JUMP,
+            condition      => NO_COND,
+            new_pc         => (others => '0'),
+            destination    => REGISTERS
+        );
         decoded.base := instr;
-        decoded := enumify_instr(instr, decoded);
+        decoded := enumify_instr(instr, pc, decoded);
         return decoded;
     end function;
 
@@ -353,14 +398,6 @@ architecture rtl of ControlEngine is
 
     signal stalled    : stage_status_t;
     signal cpu_ready  : std_logic := '0';
-
-    type jump_type_t is (JAL, JALR, BRANCH);
-    type condition_t is (LESS_THAN, LESS_THAN_EQ, EQUAL, GREATER_THAN_EQ, GREATER_THAN);
-    type jb_engine_t is record
-        pc        : unsigned(31 downto 0);
-        jump_type : jump_type_t;
-        condition : condition_t;
-    end record jb_engine_t;
 begin
     
     -- An idea is to precompute the branch and jump PCs here (with the exception of JALR, not sure what to do here.)
@@ -392,7 +429,9 @@ begin
                     -- a register, and we will provide it when the stall clears.
                     if (i_valid = '1' and cpu_ready = '1') then
                         -- Decode the new instruction, adding in the additional enums.
-                        decoded := contextual_decode(i_instr);
+                        decoded := contextual_decode(i_instr, i_pc);
+
+                        assert stalled.valid = '0' report "Overwriting previously valid stalled instruction." severity failure;
 
                         stalled <= (
                             id           => id,
@@ -403,23 +442,6 @@ begin
                             rs1_hzd      => -1, -- No point in finding the hazards right now since they may update before
                             rs2_hzd      => -1  -- this instruction gets issued.
                         );
-
-                        -- TODO: Finish this
-                        -- We need to add a jalr input port for the jalr address to pipe it through to
-                        -- the prefetcher.
-                        if (decoded.base.opcode = cJumpOpcode) then
-                            -- pc + jtype
-                            -- jump_branch_pc <= i_pc + decoded.immediate;
-                            -- can I go ahead and issue this pc update now with no consequences, despite the fact 
-                            -- that we're stalled?
-                        elsif (decoded.base.opcode = cBranchOpcode) then
-                            -- pc + btype
-                            -- jump_branch_pc <= i_pc + decoded.immediate;
-                            -- I have to wait for exec to complete on this instruction
-                            -- before I can issue this pc update.
-                        elsif (decoded.base.opcode = cBranchOpcode) then
-                            -- Indicate that we're going to jump whenever this guy finishes.
-                        end if;
 
                         -- Be sure to increment the issued id, since even though we did
                         -- not issue yet, we did practically prepare the next issued instruction.
@@ -463,7 +485,7 @@ begin
                         end if;
                     elsif (i_valid = '1' and cpu_ready = '1') then
                         -- Decode the new instruction, adding in the additional enums.
-                        decoded := contextual_decode(i_instr);
+                        decoded := contextual_decode(i_instr, i_pc);
 
                         -- Go ahead and fill out the issued output, and set it to not valid.
                         o_issued <= stage_status_t'(
