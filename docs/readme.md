@@ -1,4 +1,4 @@
-![alt text](header.png)
+![alt text](assets/header.png)
 
 #
 
@@ -6,7 +6,7 @@ NDSMD is a RISC-V soft core processor IP designed to be an extensible demonstrat
 
 ## Development Plan
 
-![text](arch_diagram.png)
+![text](assets/arch_diagram.png)
 
 > *Note: Items in green have been simulated to enough satisfaction to be considered initially validated. Items in blue have been synthesized and verified in hardware.*
 

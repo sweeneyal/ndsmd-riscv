@@ -180,3 +180,6 @@ scratch
 *.str
 *.jou
 .Xil
+
+docs/latex/notes/*
+!docs/latex/notes/*.tex
