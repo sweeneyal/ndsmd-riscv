@@ -63,11 +63,7 @@ begin
         i_valid     => stimuli.valid,
 
         i_status => stimuli.status,
-        o_issued => responses.issued,
-
-        i_slt_eq => stimuli.slt_eq,
-        o_pc     => responses.pc,
-        o_pcwen  => responses.pcwen
+        o_issued => responses.issued
     );
 
     eChecker : entity tb_ndsmd_riscv.ControlEngine_Checker

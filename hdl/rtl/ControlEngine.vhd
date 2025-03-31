@@ -54,14 +54,7 @@ entity ControlEngine is
         -- current status of the entire datapath
         i_status : in datapath_status_t;
         -- next issued instruction
-        o_issued : out stage_status_t;
-
-        -- branch condition indicator signals
-        i_slt_eq : in std_logic_vector(1 downto 0);
-        -- new jump/branch program counter
-        o_pc : out unsigned(31 downto 0);
-        -- indicator that jump/branch pc is valid
-        o_pcwen : out std_logic
+        o_issued : out stage_status_t
     );
 end entity ControlEngine;
 

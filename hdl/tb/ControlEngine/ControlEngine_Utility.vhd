@@ -39,15 +39,11 @@ package ControlEngine_Utility is
         valid : std_logic;
 
         status : datapath_status_t;
-
-        slt_eq : std_logic_vector(1 downto 0);
     end record stimuli_t;
     
     type responses_t is record
         cpu_ready : std_logic;
         issued    : stage_status_t;
-        pc        : unsigned(31 downto 0);
-        pcwen     : std_logic;
     end record responses_t;
 
     impure function generate_instruction(

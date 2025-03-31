@@ -43,6 +43,9 @@ entity Datapath is
         o_status : out datapath_status_t;
         i_issued : in stage_status_t;
 
+        o_pc    : out unsigned(31 downto 0);
+        o_pcwen : out std_logic;
+
         -- AXI-like interface to allow for easier implementation
         -- address bus for requesting an address
         o_data_awaddr : out std_logic_vector(31 downto 0);
@@ -92,6 +95,7 @@ end entity Datapath;
 architecture rtl of Datapath is
     signal opA        : std_logic_vector(31 downto 0) := (others => '0');
     signal opB        : std_logic_vector(31 downto 0) := (others => '0');
+    signal alu_out    : std_logic_vector(31 downto 0) := (others => '0');
     signal alu_res    : std_logic_vector(31 downto 0) := (others => '0');
     signal eq_res     : std_logic := '0';
     signal slt_res    : std_logic := '0';
@@ -128,11 +132,11 @@ begin
         i_opA     => opA,
         i_opB     => opB,
 
-        o_res => alu_res,
+        o_res => alu_out,
         o_eq  => eq_res
     );
 
-    slt_res <= alu_res(0);
+    slt_res <= alu_out(0);
 
     eMext : entity ndsmd_riscv.MExtension
     port map (
@@ -146,6 +150,47 @@ begin
         o_res   => mext_res,
         o_valid => mext_valid
     );
+
+    JumpBranchHandling: process(i_issued, alu_out)
+    begin
+        alu_res <= alu_out;
+        case i_issued.instr.is_jump_branch is
+            when BRANCH =>
+                o_pc    <= i_issued.instr.new_pc;
+                case i_issued.instr.condition is
+                    when LESS_THAN =>
+                        o_pcwen <= bool2bit(slt_res = '1' and eq_res = '0');
+                    when EQUAL =>
+                        o_pcwen <= bool2bit(slt_res = '0' and eq_res = '1');
+                    when NOT_EQUAL =>
+                        o_pcwen <= bool2bit(eq_res = '0');
+                    when GREATER_THAN_EQ =>
+                        o_pcwen <= bool2bit(slt_res = '0' or eq_res = '1');
+                    when NO_COND =>
+                        assert false 
+                            report "Datapath::JumpBranchHandling: BRANCH operation encountered with NO_COND condition set." 
+                            severity note;
+                        o_pcwen <= '0';
+                end case;
+                
+            when JAL =>
+                o_pc    <= i_issued.instr.new_pc;
+                o_pcwen <= '1';
+
+            when JALR =>
+                -- Because indirect jumps are a pain, we precompute the post-jump PC in the
+                -- control engine, and use the ALU to compute the target address.
+                -- Every other option in this setup has the target address precomputed instead.
+                alu_res <= std_logic_vector(i_issued.instr.new_pc);
+                o_pc    <= unsigned(alu_out);
+                o_pcwen <= '1';
+        
+            when others =>
+                o_pc    <= i_issued.instr.new_pc;
+                o_pcwen <= '0';
+                
+        end case;
+    end process JumpBranchHandling;
 
     ExecuteStage: process(i_clk)
     begin

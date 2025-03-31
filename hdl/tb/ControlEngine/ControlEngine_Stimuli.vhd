@@ -80,7 +80,6 @@ begin
                 stimuli.pc     <= (others => '0');
                 stimuli.valid  <= '0';
                 stimuli.instr  <= decode(x"00000000");
-                stimuli.slt_eq <= "00";
                 stimuli.status <= datapath_status_t'(
                     execute   => stage_status_t'(
                         id           => -1,
@@ -220,7 +219,6 @@ begin
                 stimuli.pc     <= (others => '0');
                 stimuli.valid  <= '0';
                 stimuli.instr  <= decode(x"00000000");
-                stimuli.slt_eq <= "00";
                 stimuli.status <= datapath_status_t'(
                     execute   => stage_status_t'(
                         id           => -1,

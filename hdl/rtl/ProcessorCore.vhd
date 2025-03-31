@@ -120,8 +120,6 @@ architecture rtl of ProcessorCore is
     
     signal status : datapath_status_t;
     signal issued : stage_status_t;
-    
-    signal slt_eq : std_logic_vector(1 downto 0) := (others => '0');
 begin
     
     ePrefetcher : entity ndsmd_riscv.InstrPrefetcher
@@ -161,11 +159,7 @@ begin
         i_valid     => valid,
 
         i_status => status,
-        o_issued => issued,
-
-        i_slt_eq => slt_eq,
-        o_pc     => new_pc,
-        o_pcwen  => pcwen
+        o_issued => issued
     );
 
     eDatapath : entity ndsmd_riscv.Datapath
@@ -175,6 +169,9 @@ begin
 
         o_status => status,
         i_issued => issued,
+
+        o_pc    => new_pc,
+        o_pcwen => pcwen,
 
         o_data_awaddr  => o_data_awaddr,
         o_data_awprot  => o_data_awprot,
