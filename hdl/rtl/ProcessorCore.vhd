@@ -32,6 +32,14 @@ library ndsmd_riscv;
     use ndsmd_riscv.DatapathUtility.all;
 
 entity ProcessorCore is
+    generic (
+        -- the number of buffered transactions
+        cPrefetch_NumTransactions : natural := 2;
+        -- the severity of the error caused by pc update not aligned to a multiple of 4;
+        -- this normally is a failure, but during testing with random instruction generation,
+        -- this is downgraded to a warning.
+        cPrefetch_PcMisalignmentSeverity : severity_level := failure
+    );
     port (
         -- system clock frequency
         i_clk : in std_logic;
@@ -124,7 +132,8 @@ begin
     
     ePrefetcher : entity ndsmd_riscv.InstrPrefetcher
     generic map (
-        cNumTransactions => 2
+        cNumTransactions        => cPrefetch_NumTransactions,
+        cPcMisalignmentSeverity => cPrefetch_PcMisalignmentSeverity
     ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,

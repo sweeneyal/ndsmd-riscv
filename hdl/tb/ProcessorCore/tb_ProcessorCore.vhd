@@ -39,7 +39,9 @@ begin
     );
 
     eDut : entity ndsmd_riscv.ProcessorCore
-    port map (
+    generic map (
+        cPrefetch_PcMisalignmentSeverity => warning
+    ) port map (
         i_clk    => stimuli.clk,
         i_resetn => stimuli.resetn,
 

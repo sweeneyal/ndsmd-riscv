@@ -55,7 +55,12 @@ library ndsmd_riscv;
 
 entity InstrPrefetcher is
     generic (
-        cNumTransactions : natural := 2
+        -- the number of buffered transactions
+        cNumTransactions : natural := 2;
+        -- the severity of the error caused by pc update not aligned to a multiple of 4;
+        -- this normally is a failure, but during testing with random instruction generation,
+        -- this is downgraded to a warning.
+        cPcMisalignmentSeverity : severity_level := failure
     );
     port (
         -- system clock frequency
@@ -163,7 +168,7 @@ begin
                     pc <= i_pc(31 downto 2);
                     assert i_pc(1 downto 0) = "00" 
                         report "InstrPrefetcher::StateMachine: i_pc is not a multiple of 4." 
-                            severity failure;
+                            severity cPcMisalignmentSeverity;
 
                     o_valid <= '0';
 

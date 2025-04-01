@@ -120,14 +120,17 @@ architecture rtl of Datapath is
     constant cExecuteIndex : natural := 1;
 
     type memaccess_stage_t is record
-        status : stage_status_t;
+        status  : stage_status_t;
+        alu_res : std_logic_vector(31 downto 0);
     end record memaccess_stage_t;
     signal memaccess : memaccess_stage_t;
 
     constant cMemAccessIndex : natural := 2;
 
     type writeback_stage_t is record
-        status : stage_status_t;
+        status  : stage_status_t;
+        alu_res : std_logic_vector(31 downto 0);
+        rdwen   : std_logic;
     end record writeback_stage_t;
     signal writeback : writeback_stage_t;
 
@@ -155,9 +158,9 @@ begin
         i_rs2 => i_issued.instr.base.rs2,
         o_opB => reg_opB,
 
-        i_rd    => "00000",
-        i_res   => x"00000000",
-        i_valid => '0'
+        i_rd    => writeback.status.instr.base.rd,
+        i_res   => writeback.alu_res,
+        i_valid => writeback.rdwen
     );
 
     OperandSelection: process(i_issued, reg_opA, reg_opB)
@@ -403,6 +406,11 @@ begin
                 -- decode stage is also not stalled, we can accept a new instruction.
                 if (global_stall_bus(cMemAccessIndex downto cExecuteIndex) = "00") then
                     memaccess.status <= exec.status;
+                    if (exec.status.instr.unit = MEXT) then
+                        memaccess.alu_res <= exec.mext_res;
+                    elsif (exec.status.instr.destination = REGISTERS) then
+                        memaccess.alu_res <= exec.alu_res;
+                    end if;
 
                 elsif (global_stall_bus(cMemAccessIndex) = '1') then
                     -- If we're stalled, we're either stalled because later stages are stalled or
@@ -484,7 +492,9 @@ begin
                 -- If the execute stage and all stages after it are not stalled, and the 
                 -- decode stage is also not stalled, we can accept a new instruction.
                 if (global_stall_bus(cWritebackIndex downto cMemAccessIndex) = "00") then
-                    writeback.status <= memaccess.status;
+                    writeback.status  <= memaccess.status;
+                    writeback.alu_res <= memaccess.alu_res;
+                    writeback.rdwen   <= bool2bit(memaccess.status.valid = '1' and memaccess.status.instr.destination = REGISTERS);
 
                 elsif (global_stall_bus(cWritebackIndex) = '1') then
                     -- If we're stalled, we're either stalled because later stages are stalled or
