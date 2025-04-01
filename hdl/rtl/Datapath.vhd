@@ -108,6 +108,8 @@ architecture rtl of Datapath is
 
     signal pcwen : std_logic := '0';
 
+    constant cDecodeIndex : natural := 0;
+
     type execute_stage_t is record
         status   : stage_status_t;
         alu_res  : std_logic_vector(31 downto 0);
@@ -115,15 +117,23 @@ architecture rtl of Datapath is
     end record execute_stage_t;
     signal exec : execute_stage_t;
 
+    constant cExecuteIndex : natural := 1;
+
     type memaccess_stage_t is record
         status : stage_status_t;
     end record memaccess_stage_t;
     signal memaccess : memaccess_stage_t;
 
+    constant cMemAccessIndex : natural := 2;
+
     type writeback_stage_t is record
         status : stage_status_t;
     end record writeback_stage_t;
     signal writeback : writeback_stage_t;
+
+    constant cWritebackIndex : natural := 3;
+
+    signal global_stall_bus : std_logic_vector(cWritebackIndex downto cDecodeIndex) := (others => '0');
 begin
 
     o_status <= datapath_status_t'(
@@ -131,6 +141,8 @@ begin
         memaccess => memaccess.status,
         writeback => writeback.status
     );
+
+    global_stall_bus(cDecodeIndex) <= global_stall_bus(cExecuteIndex) or not i_issued.valid;
     
     eRegisters : entity ndsmd_riscv.RegisterFile
     port map (
@@ -245,6 +257,8 @@ begin
         end case;
     end process JumpBranchHandling;
 
+    global_stall_bus(cExecuteIndex) <= global_stall_bus(cMemAccessIndex) or bool2bit(exec.status.stall_reason /= NOT_STALLED);
+
     ExecuteStage: process(i_clk)
     begin
         if rising_edge(i_clk) then
@@ -275,11 +289,15 @@ begin
                     rs2_hzd      => -1
                 );
             else
-                -- If the issued instruction is valid, and we're not stalled, 
-                -- then we can accept a new instruction.
-                if (i_issued.valid = '1' and exec.status.stall_reason = NOT_STALLED) then
-                    exec.status <= i_issued;
+                -- If everything after this stage is not stalled, we're not stalled.
+                -- The global stall bus indicates the status of the current stage to the end, and
+                -- then the following stage.
 
+                -- If the execute stage and all stages after it are not stalled, and the 
+                -- decode stage is also not stalled, we can accept a new instruction.
+                if (global_stall_bus(cExecuteIndex downto cDecodeIndex) = "00") then
+                    exec.status <= i_issued;
+    
                     -- If it's the ALU, the instruction is done already, so grab the ALU
                     -- result and move on.
                     if (i_issued.instr.unit = ALU) then
@@ -288,14 +306,27 @@ begin
                         -- However, if it's the MEXT, we need to stall until the MEXT is done.
                         exec.status.stall_reason <= EXECUTION_STALL;
                     end if;
-                elsif (exec.status.stall_reason = EXECUTION_STALL) then
-                    -- We would only be here if there's an MEXT instruction running. Wait until the
-                    -- MEXT instruction finishes.
-                    if (mext_valid = '1') then
-                        exec.mext_res <= mext_res;
-                        exec.status.stall_reason <= NOT_STALLED;
+
+                elsif (global_stall_bus(cExecuteIndex) = '1') then
+                    -- If we're stalled, we're either stalled because later stages are stalled or
+                    -- because we're executing a multi-cycle instruction. The decode stage's status
+                    -- of stalled/not stalled does not matter, as it cannot be accepted anyway without
+                    -- dropping the current instruction.
+
+                    -- If we're the one thats stalled, check if the stall has been resolved.
+                    if (exec.status.stall_reason = EXECUTION_STALL) then
+                        -- We would only be here if there's an MEXT instruction running. Wait until the
+                        -- MEXT instruction finishes.
+                        if (mext_valid = '1') then
+                            exec.mext_res <= mext_res;
+                            exec.status.stall_reason <= NOT_STALLED;
+                        end if;
                     end if;
-                else
+
+                elsif (global_stall_bus(cExecuteIndex downto cDecodeIndex) = "01") then
+                    -- Alternatively, the decode stage could be stalled, i.e. it did not issue a new
+                    -- instruction. Therefore just populate the exec status with an invalid instruction.
+
                     exec.status <= stage_status_t'(
                         id           => -1,
                         pc           => (others => '0'),
@@ -334,6 +365,8 @@ begin
 
     -- );
 
+    global_stall_bus(cMemAccessIndex) <= global_stall_bus(cWritebackIndex) or bool2bit(memaccess.status.stall_reason /= NOT_STALLED);
+
     MemAccessStage: process(i_clk)
     begin
         if rising_edge(i_clk) then
@@ -362,42 +395,30 @@ begin
                     rs2_hzd      => -1
                 );
             else
-                -- -- If exec is stalled, but the writeback stage is not stalled, memaccess will be passed on
-                -- -- so we need to invalidate memaccess.
-                -- if (exec.status.stall_reason /= NOT_STALLED 
-                --         and writeback.status.stall_reason = NOT_STALLED) then
-                --     memaccess.status <= stage_status_t'(
-                --         id           => -1,
-                --         pc           => (others => '0'),
-                --         instr        => decoded_instr_t'(
-                --             base           => decode(x"00000000"),
-                --             unit           => ALU,
-                --             operation      => NULL_OP,
-                --             source1        => REGISTERS,
-                --             source2        => REGISTERS,
-                --             is_immed       => false,
-                --             immediate      => (others => '0'),
-                --             is_memory      => false,
-                --             memoperation   => LOAD_BYTE,
-                --             is_jump_branch => NOT_JUMP,
-                --             condition      => NO_COND,
-                --             new_pc         => (others => '0'),
-                --             destination    => REGISTERS
-                --         ),
-                --         valid        => '0',
-                --         stall_reason => NOT_STALLED,
-                --         rs1_hzd      => -1,
-                --         rs2_hzd      => -1
-                --     );
-                -- elsif (exec.status.stall_reason = NOT_STALLED 
-                --         and writeback.status.stall_reason = NOT_STALLED) then
-                --     -- If exec and writeback are both not stalled, pass memaccess and exec forward as usual.
-                --     memaccess.status <= exec.status;
+                -- If everything after this stage is not stalled, we're not stalled.
+                -- The global stall bus indicates the status of the current stage to the end, and
+                -- then the following stage.
 
-                --     -- Further, if writeback is stalled, do nothing.
-                -- end if;
+                -- If the execute stage and all stages after it are not stalled, and the 
+                -- decode stage is also not stalled, we can accept a new instruction.
+                if (global_stall_bus(cMemAccessIndex downto cExecuteIndex) = "00") then
+                    memaccess.status <= exec.status;
 
-                if (exec.status.stall_reason /= NOT_STALLED) then
+                elsif (global_stall_bus(cMemAccessIndex) = '1') then
+                    -- If we're stalled, we're either stalled because later stages are stalled or
+                    -- because we're executing a multi-cycle instruction. The execute stage's status
+                    -- of stalled/not stalled does not matter, as it cannot be accepted anyway without
+                    -- dropping the current instruction.
+
+                    -- If we're the one thats stalled, check if the stall has been resolved.
+                    if (memaccess.status.stall_reason = MEMORY_STALL) then
+                        memaccess.status.stall_reason <= NOT_STALLED;
+                    end if;
+
+                elsif (global_stall_bus(cMemAccessIndex downto cExecuteIndex) = "01") then
+                    -- Alternatively, the decode stage could be stalled, i.e. it did not issue a new
+                    -- instruction. Therefore just populate the exec status with an invalid instruction.
+
                     memaccess.status <= stage_status_t'(
                         id           => -1,
                         pc           => (others => '0'),
@@ -421,12 +442,12 @@ begin
                         rs1_hzd      => -1,
                         rs2_hzd      => -1
                     );
-                else
-                    memaccess.status <= exec.status;
                 end if;
             end if;
         end if;
     end process MemAccessStage;
+
+    global_stall_bus(cWritebackIndex) <= bool2bit(writeback.status.stall_reason /= NOT_STALLED);
 
     WritebackStage: process(i_clk)
     begin
@@ -456,34 +477,54 @@ begin
                     rs2_hzd      => -1
                 );
             else
-                -- if (memaccess.status.stall_reason = NOT_STALLED) then
-                --     writeback.status <= memaccess.status;
-                -- else
-                --     writeback.status <= stage_status_t'(
-                --         id           => -1,
-                --         pc           => (others => '0'),
-                --         instr        => decoded_instr_t'(
-                --             base           => decode(x"00000000"),
-                --             unit           => ALU,
-                --             operation      => NULL_OP,
-                --             source1        => REGISTERS,
-                --             source2        => REGISTERS,
-                --             is_immed       => false,
-                --             immediate      => (others => '0'),
-                --             is_memory      => false,
-                --             memoperation   => LOAD_BYTE,
-                --             is_jump_branch => NOT_JUMP,
-                --             condition      => NO_COND,
-                --             new_pc         => (others => '0'),
-                --             destination    => REGISTERS
-                --         ),
-                --         valid        => '0',
-                --         stall_reason => NOT_STALLED,
-                --         rs1_hzd      => -1,
-                --         rs2_hzd      => -1
-                --     );
-                -- end if;
-                writeback.status <= memaccess.status;
+                -- If everything after this stage is not stalled, we're not stalled.
+                -- The global stall bus indicates the status of the current stage to the end, and
+                -- then the following stage.
+
+                -- If the execute stage and all stages after it are not stalled, and the 
+                -- decode stage is also not stalled, we can accept a new instruction.
+                if (global_stall_bus(cWritebackIndex downto cMemAccessIndex) = "00") then
+                    writeback.status <= memaccess.status;
+
+                elsif (global_stall_bus(cWritebackIndex) = '1') then
+                    -- If we're stalled, we're either stalled because later stages are stalled or
+                    -- because we're executing a multi-cycle instruction. The execute stage's status
+                    -- of stalled/not stalled does not matter, as it cannot be accepted anyway without
+                    -- dropping the current instruction.
+
+                    -- If we're the one thats stalled, check if the stall has been resolved.
+                    if (writeback.status.stall_reason = MEMORY_STALL) then
+                        writeback.status.stall_reason <= NOT_STALLED;
+                    end if;
+
+                elsif (global_stall_bus(cWritebackIndex downto cMemAccessIndex) = "01") then
+                    -- Alternatively, the decode stage could be stalled, i.e. it did not issue a new
+                    -- instruction. Therefore just populate the exec status with an invalid instruction.
+
+                    writeback.status <= stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base           => decode(x"00000000"),
+                            unit           => ALU,
+                            operation      => NULL_OP,
+                            source1        => REGISTERS,
+                            source2        => REGISTERS,
+                            is_immed       => false,
+                            immediate      => (others => '0'),
+                            is_memory      => false,
+                            memoperation   => LOAD_BYTE,
+                            is_jump_branch => NOT_JUMP,
+                            condition      => NO_COND,
+                            new_pc         => (others => '0'),
+                            destination    => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    );
+                end if;
             end if;
         end if;
     end process WritebackStage;
