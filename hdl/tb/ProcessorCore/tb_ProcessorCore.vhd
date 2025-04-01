@@ -40,8 +40,8 @@ begin
 
     eDut : entity ndsmd_riscv.ProcessorCore
     port map (
-        i_clk    => '0',
-        i_resetn => '0',
+        i_clk    => stimuli.clk,
+        i_resetn => stimuli.resetn,
 
         o_instr_araddr  => responses.instr_araddr,
         o_instr_arprot  => responses.instr_arprot,

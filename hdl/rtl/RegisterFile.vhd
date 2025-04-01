@@ -24,7 +24,7 @@ entity RegisterFile is
 end entity RegisterFile;
 
 architecture rtl of RegisterFile is
-    signal registers : std_logic_matrix_t(0 to 31)(31 downto 0);
+    signal registers : std_logic_matrix_t(0 to 31)(31 downto 0) := (others => (others => '0'));
 begin
     
     RegisterImplementation: process(i_clk)

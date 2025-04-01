@@ -31,6 +31,7 @@ library ndsmd_riscv;
 
 library tb_ndsmd_riscv;
     use tb_ndsmd_riscv.ControlEngine_Utility.all;
+    use tb_ndsmd_riscv.RiscvUtility.all;
 
 entity ControlEngine_Stimuli is
     generic (nested_runner_cfg : string);

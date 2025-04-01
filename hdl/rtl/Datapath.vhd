@@ -93,8 +93,12 @@ entity Datapath is
 end entity Datapath;
 
 architecture rtl of Datapath is
+    signal reg_opA        : std_logic_vector(31 downto 0) := (others => '0');
+    signal reg_opB        : std_logic_vector(31 downto 0) := (others => '0');
+
     signal opA        : std_logic_vector(31 downto 0) := (others => '0');
     signal opB        : std_logic_vector(31 downto 0) := (others => '0');
+
     signal alu_out    : std_logic_vector(31 downto 0) := (others => '0');
     signal alu_res    : std_logic_vector(31 downto 0) := (others => '0');
     signal eq_res     : std_logic := '0';
@@ -102,13 +106,31 @@ architecture rtl of Datapath is
     signal mext_res   : std_logic_vector(31 downto 0) := (others => '0');
     signal mext_valid : std_logic := '0';
 
+    signal pcwen : std_logic := '0';
+
     type execute_stage_t is record
         status   : stage_status_t;
         alu_res  : std_logic_vector(31 downto 0);
         mext_res : std_logic_vector(31 downto 0);
     end record execute_stage_t;
     signal exec : execute_stage_t;
+
+    type memaccess_stage_t is record
+        status : stage_status_t;
+    end record memaccess_stage_t;
+    signal memaccess : memaccess_stage_t;
+
+    type writeback_stage_t is record
+        status : stage_status_t;
+    end record writeback_stage_t;
+    signal writeback : writeback_stage_t;
 begin
+
+    o_status <= datapath_status_t'(
+        execute => exec.status,
+        memaccess => memaccess.status,
+        writeback => writeback.status
+    );
     
     eRegisters : entity ndsmd_riscv.RegisterFile
     port map (
@@ -116,15 +138,44 @@ begin
         i_resetn => i_resetn,
 
         i_rs1 => i_issued.instr.base.rs1,
-        o_opA => opA,
+        o_opA => reg_opA,
 
         i_rs2 => i_issued.instr.base.rs2,
-        o_opB => opB,
+        o_opB => reg_opB,
 
         i_rd    => "00000",
         i_res   => x"00000000",
         i_valid => '0'
     );
+
+    OperandSelection: process(i_issued, reg_opA, reg_opB)
+    begin
+        case i_issued.instr.source1 is
+            when REGISTERS =>
+                opA <= reg_opA;
+            when PROGRAM_COUNTER =>
+                opA <= std_logic_vector(i_issued.pc);
+            when ZERO =>
+                opA <= (others => '0');
+            when others =>
+                assert false 
+                    report "Operand A should never be anything other than registers, program counter, or zero." 
+                    severity failure;
+                opA <= (others => '0');
+        end case;
+
+        case i_issued.instr.source2 is
+            when REGISTERS =>
+                opB <= reg_opB;
+            when IMMEDIATE =>
+                opB <= std_logic_vector(i_issued.instr.immediate);
+            when others =>
+                assert false 
+                    report "Operand A should never be anything other than registers, program counter, or zero." 
+                    severity failure;
+                opB <= (others => '0');
+        end case;
+    end process OperandSelection;
 
     eAlu : entity ndsmd_riscv.IntegerAlu
     port map (
@@ -151,6 +202,8 @@ begin
         o_valid => mext_valid
     );
 
+    o_pcwen <= pcwen and i_issued.valid;
+
     JumpBranchHandling: process(i_issued, alu_out)
     begin
         alu_res <= alu_out;
@@ -159,23 +212,23 @@ begin
                 o_pc    <= i_issued.instr.new_pc;
                 case i_issued.instr.condition is
                     when LESS_THAN =>
-                        o_pcwen <= bool2bit(slt_res = '1' and eq_res = '0');
+                        pcwen <= bool2bit(slt_res = '1' and eq_res = '0');
                     when EQUAL =>
-                        o_pcwen <= bool2bit(slt_res = '0' and eq_res = '1');
+                        pcwen <= bool2bit(slt_res = '0' and eq_res = '1');
                     when NOT_EQUAL =>
-                        o_pcwen <= bool2bit(eq_res = '0');
+                        pcwen <= bool2bit(eq_res = '0');
                     when GREATER_THAN_EQ =>
-                        o_pcwen <= bool2bit(slt_res = '0' or eq_res = '1');
+                        pcwen <= bool2bit(slt_res = '0' or eq_res = '1');
                     when NO_COND =>
                         assert false 
                             report "Datapath::JumpBranchHandling: BRANCH operation encountered with NO_COND condition set." 
                             severity note;
-                        o_pcwen <= '0';
+                        pcwen <= '0';
                 end case;
                 
             when JAL =>
                 o_pc    <= i_issued.instr.new_pc;
-                o_pcwen <= '1';
+                pcwen <= '1';
 
             when JALR =>
                 -- Because indirect jumps are a pain, we precompute the post-jump PC in the
@@ -183,11 +236,11 @@ begin
                 -- Every other option in this setup has the target address precomputed instead.
                 alu_res <= std_logic_vector(i_issued.instr.new_pc);
                 o_pc    <= unsigned(alu_out);
-                o_pcwen <= '1';
+                pcwen <= '1';
         
             when others =>
                 o_pc    <= i_issued.instr.new_pc;
-                o_pcwen <= '0';
+                pcwen <= '0';
                 
         end case;
     end process JumpBranchHandling;
@@ -198,8 +251,29 @@ begin
             if (i_resetn = '0') then
                 exec.alu_res  <= (others => '0');
                 exec.mext_res <= (others => '0');
-                exec.status.valid        <= '0';
-                exec.status.stall_reason <= NOT_STALLED;
+                exec.status <= stage_status_t'(
+                    id           => -1,
+                    pc           => (others => '0'),
+                    instr        => decoded_instr_t'(
+                        base           => decode(x"00000000"),
+                        unit           => ALU,
+                        operation      => NULL_OP,
+                        source1        => REGISTERS,
+                        source2        => REGISTERS,
+                        is_immed       => false,
+                        immediate      => (others => '0'),
+                        is_memory      => false,
+                        memoperation   => LOAD_BYTE,
+                        is_jump_branch => NOT_JUMP,
+                        condition      => NO_COND,
+                        new_pc         => (others => '0'),
+                        destination    => REGISTERS
+                    ),
+                    valid        => '0',
+                    stall_reason => NOT_STALLED,
+                    rs1_hzd      => -1,
+                    rs2_hzd      => -1
+                );
             else
                 -- If the issued instruction is valid, and we're not stalled, 
                 -- then we can accept a new instruction.
@@ -221,6 +295,30 @@ begin
                         exec.mext_res <= mext_res;
                         exec.status.stall_reason <= NOT_STALLED;
                     end if;
+                else
+                    exec.status <= stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base           => decode(x"00000000"),
+                            unit           => ALU,
+                            operation      => NULL_OP,
+                            source1        => REGISTERS,
+                            source2        => REGISTERS,
+                            is_immed       => false,
+                            immediate      => (others => '0'),
+                            is_memory      => false,
+                            memoperation   => LOAD_BYTE,
+                            is_jump_branch => NOT_JUMP,
+                            condition      => NO_COND,
+                            new_pc         => (others => '0'),
+                            destination    => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    );
                 end if;
             end if;
         end if;
@@ -235,6 +333,160 @@ begin
     -- port map (
 
     -- );
+
+    MemAccessStage: process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_resetn = '0') then
+                memaccess.status <= stage_status_t'(
+                    id           => -1,
+                    pc           => (others => '0'),
+                    instr        => decoded_instr_t'(
+                        base           => decode(x"00000000"),
+                        unit           => ALU,
+                        operation      => NULL_OP,
+                        source1        => REGISTERS,
+                        source2        => REGISTERS,
+                        is_immed       => false,
+                        immediate      => (others => '0'),
+                        is_memory      => false,
+                        memoperation   => LOAD_BYTE,
+                        is_jump_branch => NOT_JUMP,
+                        condition      => NO_COND,
+                        new_pc         => (others => '0'),
+                        destination    => REGISTERS
+                    ),
+                    valid        => '0',
+                    stall_reason => NOT_STALLED,
+                    rs1_hzd      => -1,
+                    rs2_hzd      => -1
+                );
+            else
+                -- -- If exec is stalled, but the writeback stage is not stalled, memaccess will be passed on
+                -- -- so we need to invalidate memaccess.
+                -- if (exec.status.stall_reason /= NOT_STALLED 
+                --         and writeback.status.stall_reason = NOT_STALLED) then
+                --     memaccess.status <= stage_status_t'(
+                --         id           => -1,
+                --         pc           => (others => '0'),
+                --         instr        => decoded_instr_t'(
+                --             base           => decode(x"00000000"),
+                --             unit           => ALU,
+                --             operation      => NULL_OP,
+                --             source1        => REGISTERS,
+                --             source2        => REGISTERS,
+                --             is_immed       => false,
+                --             immediate      => (others => '0'),
+                --             is_memory      => false,
+                --             memoperation   => LOAD_BYTE,
+                --             is_jump_branch => NOT_JUMP,
+                --             condition      => NO_COND,
+                --             new_pc         => (others => '0'),
+                --             destination    => REGISTERS
+                --         ),
+                --         valid        => '0',
+                --         stall_reason => NOT_STALLED,
+                --         rs1_hzd      => -1,
+                --         rs2_hzd      => -1
+                --     );
+                -- elsif (exec.status.stall_reason = NOT_STALLED 
+                --         and writeback.status.stall_reason = NOT_STALLED) then
+                --     -- If exec and writeback are both not stalled, pass memaccess and exec forward as usual.
+                --     memaccess.status <= exec.status;
+
+                --     -- Further, if writeback is stalled, do nothing.
+                -- end if;
+
+                if (exec.status.stall_reason /= NOT_STALLED) then
+                    memaccess.status <= stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base           => decode(x"00000000"),
+                            unit           => ALU,
+                            operation      => NULL_OP,
+                            source1        => REGISTERS,
+                            source2        => REGISTERS,
+                            is_immed       => false,
+                            immediate      => (others => '0'),
+                            is_memory      => false,
+                            memoperation   => LOAD_BYTE,
+                            is_jump_branch => NOT_JUMP,
+                            condition      => NO_COND,
+                            new_pc         => (others => '0'),
+                            destination    => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    );
+                else
+                    memaccess.status <= exec.status;
+                end if;
+            end if;
+        end if;
+    end process MemAccessStage;
+
+    WritebackStage: process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_resetn = '0') then
+                writeback.status <= stage_status_t'(
+                    id           => -1,
+                    pc           => (others => '0'),
+                    instr        => decoded_instr_t'(
+                        base           => decode(x"00000000"),
+                        unit           => ALU,
+                        operation      => NULL_OP,
+                        source1        => REGISTERS,
+                        source2        => REGISTERS,
+                        is_immed       => false,
+                        immediate      => (others => '0'),
+                        is_memory      => false,
+                        memoperation   => LOAD_BYTE,
+                        is_jump_branch => NOT_JUMP,
+                        condition      => NO_COND,
+                        new_pc         => (others => '0'),
+                        destination    => REGISTERS
+                    ),
+                    valid        => '0',
+                    stall_reason => NOT_STALLED,
+                    rs1_hzd      => -1,
+                    rs2_hzd      => -1
+                );
+            else
+                -- if (memaccess.status.stall_reason = NOT_STALLED) then
+                --     writeback.status <= memaccess.status;
+                -- else
+                --     writeback.status <= stage_status_t'(
+                --         id           => -1,
+                --         pc           => (others => '0'),
+                --         instr        => decoded_instr_t'(
+                --             base           => decode(x"00000000"),
+                --             unit           => ALU,
+                --             operation      => NULL_OP,
+                --             source1        => REGISTERS,
+                --             source2        => REGISTERS,
+                --             is_immed       => false,
+                --             immediate      => (others => '0'),
+                --             is_memory      => false,
+                --             memoperation   => LOAD_BYTE,
+                --             is_jump_branch => NOT_JUMP,
+                --             condition      => NO_COND,
+                --             new_pc         => (others => '0'),
+                --             destination    => REGISTERS
+                --         ),
+                --         valid        => '0',
+                --         stall_reason => NOT_STALLED,
+                --         rs1_hzd      => -1,
+                --         rs2_hzd      => -1
+                --     );
+                -- end if;
+                writeback.status <= memaccess.status;
+            end if;
+        end if;
+    end process WritebackStage;
 
     -- For the eventual tomasulo, leverage a FIFO that allows me to 
     -- keep track of the issued instructions. For example, we can issue

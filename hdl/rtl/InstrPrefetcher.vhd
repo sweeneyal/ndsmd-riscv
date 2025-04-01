@@ -165,6 +165,8 @@ begin
                         report "InstrPrefetcher::StateMachine: i_pc is not a multiple of 4." 
                             severity failure;
 
+                    o_valid <= '0';
+
                     -- A future feature here would be to check if the sequence PC, 
                     -- PC + 4, PC + 8 are contained in the prefetch at all,
                     -- which could save some additional cycles for prefetches.

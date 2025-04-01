@@ -159,7 +159,8 @@ begin
         i_valid     => valid,
 
         i_status => status,
-        o_issued => issued
+        o_issued => issued,
+        i_pcwen  => pcwen
     );
 
     eDatapath : entity ndsmd_riscv.Datapath

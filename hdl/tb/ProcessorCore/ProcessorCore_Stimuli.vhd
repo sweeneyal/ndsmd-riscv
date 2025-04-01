@@ -27,6 +27,7 @@ library simtools;
 
 library tb_ndsmd_riscv;
     use tb_ndsmd_riscv.ProcessorCore_Utility.all;
+    use tb_ndsmd_riscv.RiscvUtility.all;
 
 entity ProcessorCore_Stimuli is
     generic (nested_runner_cfg : string);
@@ -77,7 +78,41 @@ begin
         while test_suite loop
             if run("t_max_throughput") then
                 info("Running maxthroughput test");
-                
+                stimuli.resetn <= '0';
+                stimuli.instr_arready <= '0';
+                stimuli.instr_rresp   <= "00";
+                stimuli.instr_rdata   <= (others => '0');
+                stimuli.instr_rvalid  <= '0';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                stimuli.resetn <= '1';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                stimuli.instr_arready <= '1';
+
+                for ii in 0 to 10 loop
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+                end loop;
+
+                for ii in 0 to 10000 loop
+                    -- Waiting until this is 1 when it is already 1 is 
+                    -- a surefire way to trigger the WDT. Probably a VHDL feature?
+                    if (i_responses.instr_rready = '1') then
+                        stimuli.instr_rdata  <= generate_instruction(
+                            -1, 
+                            rand.RandInt(0, 100000),
+                            rand.RandInt(0, 100000)
+                        );
+                        stimuli.instr_rvalid <= '1';
+                        stimuli.instr_rresp  <= "00";
+                    end if;
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+                end loop;
             end if;
         end loop;
     

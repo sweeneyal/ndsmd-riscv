@@ -107,5 +107,21 @@ begin
         i_shamt  => i_opB(4 downto 0),
         o_res    => shift_res
     );
+
+    ResultMux: process(i_decoded, add_res, bitwise_res, slt_res, shift_res)
+    begin
+        case i_decoded.operation is
+            when ADD | SUBTRACT =>
+                o_res <= add_res;
+            when BITWISE_AND | BITWISE_OR | BITWISE_XOR =>
+                o_res <= bitwise_res;
+            when SLT | SLTU =>
+                o_res <= slt_res;
+            when SHIFT_LL | SHIFT_RA | SHIFT_RL =>
+                o_res <= shift_res;
+            when others =>
+                o_res <= (others => '0');
+        end case;
+    end process ResultMux;
     
 end architecture rtl;

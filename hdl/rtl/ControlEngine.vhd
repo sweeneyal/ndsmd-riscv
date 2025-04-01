@@ -54,7 +54,9 @@ entity ControlEngine is
         -- current status of the entire datapath
         i_status : in datapath_status_t;
         -- next issued instruction
-        o_issued : out stage_status_t
+        o_issued : out stage_status_t;
+        -- indicator that the program counter has changed
+        i_pcwen : in std_logic
     );
 end entity ControlEngine;
 
@@ -411,7 +413,11 @@ begin
                 cpu_ready      <= '0';
                 o_issued.valid <= '0';
             else
-                if (i_status.execute.stall_reason /= NOT_STALLED or 
+                if (i_pcwen = '1') then
+                    stalled.valid  <= '0';
+                    cpu_ready      <= '0';
+                    o_issued.valid <= '0';
+                elsif (i_status.execute.stall_reason /= NOT_STALLED or 
                         i_status.memaccess.stall_reason /= NOT_STALLED or 
                             i_status.writeback.stall_reason /= NOT_STALLED) then
                     -- If anything in the status is stalled, we need to not accept any further instructions.
