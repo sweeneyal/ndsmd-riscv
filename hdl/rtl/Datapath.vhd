@@ -108,10 +108,15 @@ architecture rtl of Datapath is
 
     signal pcwen : std_logic := '0';
 
+    signal mem_res : std_logic_vector(31 downto 0) := (others => '0');
+    signal mem_valid : std_logic := '0';
+
     constant cDecodeIndex : natural := 0;
 
     type execute_stage_t is record
         status   : stage_status_t;
+        reg_opA  : std_logic_vector(31 downto 0);
+        reg_opB  : std_logic_vector(31 downto 0);
         alu_res  : std_logic_vector(31 downto 0);
         mext_res : std_logic_vector(31 downto 0);
     end record execute_stage_t;
@@ -266,6 +271,8 @@ begin
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
+                exec.reg_opA  <= (others => '0');
+                exec.reg_opB  <= (others => '0');
                 exec.alu_res  <= (others => '0');
                 exec.mext_res <= (others => '0');
                 exec.status <= stage_status_t'(
@@ -309,6 +316,9 @@ begin
                         -- However, if it's the MEXT, we need to stall until the MEXT is done.
                         exec.status.stall_reason <= EXECUTION_STALL;
                     end if;
+
+                    exec.reg_opA <= reg_opA;
+                    exec.reg_opB <= reg_opB;
 
                 elsif (global_stall_bus(cExecuteIndex) = '1') then
                     -- If we're stalled, we're either stalled because later stages are stalled or
@@ -358,10 +368,41 @@ begin
         end if;
     end process ExecuteStage;
 
-    -- eMemoryUnit : entity ndsmd_riscv.MemoryAccessUnit
-    -- port map (
+    eMemoryUnit : entity ndsmd_riscv.MemoryUnit
+    port map (
+        i_clk    => i_clk,
+        i_resetn => i_resetn,
 
-    -- );
+        i_decoded => exec.status.instr,
+        i_addr    => exec.alu_res,
+        i_data    => exec.reg_opB,
+        o_res     => mem_res,
+        o_valid   => mem_valid,
+
+        o_data_awaddr  => o_data_awaddr,
+        o_data_awprot  => o_data_awprot,
+        o_data_awvalid => o_data_awvalid,
+        i_data_awready => i_data_awready,
+
+        o_data_wdata  => o_data_wdata,
+        o_data_wstrb  => o_data_wstrb,
+        o_data_wvalid => o_data_wvalid,
+        i_data_wready => i_data_wready,
+
+        i_data_bresp  => i_data_bresp,
+        i_data_bvalid => i_data_bvalid,
+        o_data_bready => o_data_bready,
+
+        o_data_araddr  => o_data_araddr,
+        o_data_arprot  => o_data_arprot,
+        o_data_arvalid => o_data_arvalid,
+        i_data_arready => i_data_arready,
+
+        i_data_rdata  => i_data_rdata,
+        i_data_rresp  => i_data_rresp,
+        i_data_rvalid => i_data_rvalid,
+        o_data_rready => o_data_rready
+    );
 
     -- eZiCsr : entity ndsmd_riscv.ZiCsrExtension
     -- port map (
