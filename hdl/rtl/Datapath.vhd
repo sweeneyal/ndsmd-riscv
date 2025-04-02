@@ -125,8 +125,8 @@ architecture rtl of Datapath is
     constant cExecuteIndex : natural := 1;
 
     type memaccess_stage_t is record
-        status  : stage_status_t;
-        alu_res : std_logic_vector(31 downto 0);
+        status   : stage_status_t;
+        exec_res : std_logic_vector(31 downto 0);
     end record memaccess_stage_t;
     signal memaccess : memaccess_stage_t;
 
@@ -134,7 +134,7 @@ architecture rtl of Datapath is
 
     type writeback_stage_t is record
         status  : stage_status_t;
-        alu_res : std_logic_vector(31 downto 0);
+        res     : std_logic_vector(31 downto 0);
         rdwen   : std_logic;
     end record writeback_stage_t;
     signal writeback : writeback_stage_t;
@@ -164,7 +164,7 @@ begin
         o_opB => reg_opB,
 
         i_rd    => writeback.status.instr.base.rd,
-        i_res   => writeback.alu_res,
+        i_res   => writeback.res,
         i_valid => writeback.rdwen
     );
 
@@ -227,7 +227,7 @@ begin
     JumpBranchHandling: process(i_issued, alu_out)
     begin
         alu_res <= alu_out;
-        case i_issued.instr.is_jump_branch is
+        case i_issued.instr.jump_branch is
             when BRANCH =>
                 o_pc    <= i_issued.instr.new_pc;
                 case i_issued.instr.condition is
@@ -284,11 +284,10 @@ begin
                         operation      => NULL_OP,
                         source1        => REGISTERS,
                         source2        => REGISTERS,
-                        is_immed       => false,
                         immediate      => (others => '0'),
-                        is_memory      => false,
-                        memoperation   => LOAD_BYTE,
-                        is_jump_branch => NOT_JUMP,
+                        mem_operation  => NULL_OP,
+                        mem_access     => BYTE_ACCESS,
+                        jump_branch    => NOT_JUMP,
                         condition      => NO_COND,
                         new_pc         => (others => '0'),
                         destination    => REGISTERS
@@ -349,11 +348,10 @@ begin
                             operation      => NULL_OP,
                             source1        => REGISTERS,
                             source2        => REGISTERS,
-                            is_immed       => false,
                             immediate      => (others => '0'),
-                            is_memory      => false,
-                            memoperation   => LOAD_BYTE,
-                            is_jump_branch => NOT_JUMP,
+                            mem_operation  => NULL_OP,
+                            mem_access     => BYTE_ACCESS,
+                            jump_branch    => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
                             destination    => REGISTERS
@@ -424,11 +422,10 @@ begin
                         operation      => NULL_OP,
                         source1        => REGISTERS,
                         source2        => REGISTERS,
-                        is_immed       => false,
                         immediate      => (others => '0'),
-                        is_memory      => false,
-                        memoperation   => LOAD_BYTE,
-                        is_jump_branch => NOT_JUMP,
+                        mem_operation  => NULL_OP,
+                        mem_access     => BYTE_ACCESS,
+                        jump_branch    => NOT_JUMP,
                         condition      => NO_COND,
                         new_pc         => (others => '0'),
                         destination    => REGISTERS
@@ -448,9 +445,9 @@ begin
                 if (global_stall_bus(cMemAccessIndex downto cExecuteIndex) = "00") then
                     memaccess.status <= exec.status;
                     if (exec.status.instr.unit = MEXT) then
-                        memaccess.alu_res <= exec.mext_res;
+                        memaccess.exec_res <= exec.mext_res;
                     elsif (exec.status.instr.destination = REGISTERS) then
-                        memaccess.alu_res <= exec.alu_res;
+                        memaccess.exec_res <= exec.alu_res;
                     end if;
 
                 elsif (global_stall_bus(cMemAccessIndex) = '1') then
@@ -477,11 +474,10 @@ begin
                             operation      => NULL_OP,
                             source1        => REGISTERS,
                             source2        => REGISTERS,
-                            is_immed       => false,
                             immediate      => (others => '0'),
-                            is_memory      => false,
-                            memoperation   => LOAD_BYTE,
-                            is_jump_branch => NOT_JUMP,
+                            mem_operation  => NULL_OP,
+                            mem_access     => BYTE_ACCESS,
+                            jump_branch    => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
                             destination    => REGISTERS
@@ -511,11 +507,10 @@ begin
                         operation      => NULL_OP,
                         source1        => REGISTERS,
                         source2        => REGISTERS,
-                        is_immed       => false,
                         immediate      => (others => '0'),
-                        is_memory      => false,
-                        memoperation   => LOAD_BYTE,
-                        is_jump_branch => NOT_JUMP,
+                        mem_operation  => NULL_OP,
+                        mem_access     => BYTE_ACCESS,
+                        jump_branch    => NOT_JUMP,
                         condition      => NO_COND,
                         new_pc         => (others => '0'),
                         destination    => REGISTERS
@@ -534,7 +529,7 @@ begin
                 -- decode stage is also not stalled, we can accept a new instruction.
                 if (global_stall_bus(cWritebackIndex downto cMemAccessIndex) = "00") then
                     writeback.status  <= memaccess.status;
-                    writeback.alu_res <= memaccess.alu_res;
+                    writeback.res     <= memaccess.exec_res;
                     writeback.rdwen   <= bool2bit(memaccess.status.valid = '1' and memaccess.status.instr.destination = REGISTERS);
 
                 elsif (global_stall_bus(cWritebackIndex) = '1') then
@@ -561,11 +556,10 @@ begin
                             operation      => NULL_OP,
                             source1        => REGISTERS,
                             source2        => REGISTERS,
-                            is_immed       => false,
                             immediate      => (others => '0'),
-                            is_memory      => false,
-                            memoperation   => LOAD_BYTE,
-                            is_jump_branch => NOT_JUMP,
+                            mem_operation  => NULL_OP,
+                            mem_access     => BYTE_ACCESS,
+                            jump_branch    => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
                             destination    => REGISTERS

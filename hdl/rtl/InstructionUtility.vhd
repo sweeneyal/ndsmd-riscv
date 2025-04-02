@@ -95,10 +95,8 @@ package InstructionUtility is
 
     -- Memory operations are kept separate from ALU/MEXT, because the ALU is used to compute the 
     -- address of the memory operation, and the memory operation is completed in the mem access stage.
-    type memoperation_t is (
-        -- Memory operations
-        LOAD_BYTE, LOAD_HALF_WORD, LOAD_WORD, LOAD_UBYTE, LOAD_UHALF_WORD,
-        STORE_BYTE, STORE_HALF_WORD, STORE_WORD);
+    type mem_operation_t is (NULL_OP, LOAD, STORE);
+    type mem_access_t is (BYTE_ACCESS, HALF_WORD_ACCESS, WORD_ACCESS, UBYTE_ACCESS, UHALF_WORD_ACCESS);
 
     -- Since we can either use a register operand, the program counter, or 
     -- another hardcoded zero for the first source, indicate the correct source.
@@ -115,7 +113,7 @@ package InstructionUtility is
     type destination_t is (REGISTERS, MEMORY, BRANCH);
 
     type decoded_instr_t is record
-        -- the base decoded instruction, including all relevant fields
+        -- the base decoded instruction, including all fields relevant or not
         base : instruction_t;
         -- the functional unit used during this operation
         unit : functional_unit_t;
@@ -123,19 +121,16 @@ package InstructionUtility is
         operation : operation_t;
 
         -- operand fields
-        source1 : source_t;
-        source2 : source_t;
-        
-        -- immediate specific fields
-        is_immed : boolean;
+        source1   : source_t;
+        source2   : source_t;
         immediate : std_logic_vector(31 downto 0);
 
         -- memory specific fields
-        is_memory : boolean;
-        memoperation : memoperation_t;
+        mem_operation : mem_operation_t;
+        mem_access    : mem_access_t;
 
         -- jump/branch specific fields
-        is_jump_branch : jump_type_t;
+        jump_branch : jump_type_t;
         condition      : condition_t;
         new_pc         : unsigned(31 downto 0);
 

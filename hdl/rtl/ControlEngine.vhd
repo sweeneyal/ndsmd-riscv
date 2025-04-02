@@ -100,7 +100,6 @@ architecture rtl of ControlEngine is
                 -- The destination of the instruction is either a register, memory, or it is a branch
                 -- instruction where there is no destination.
                 decoded.destination := REGISTERS;
-                decoded.is_immed    := true;
                 decoded.source2     := IMMEDIATE;
                 decoded.immediate   := std_logic_vector(resize(signed(instr.itype), 32));
 
@@ -147,7 +146,6 @@ architecture rtl of ControlEngine is
                     decoded.unit := MEXT;
                 end if;
 
-                decoded.is_immed  := false;
                 decoded.source2   := REGISTERS;
                 decoded.immediate := (others => '0');
 
@@ -236,16 +234,33 @@ architecture rtl of ControlEngine is
                 -- Indicate the functional unit required for this operation.
                 decoded.unit      := ALU;
                 decoded.source1   := REGISTERS;
-                decoded.is_immed  := true;
                 decoded.source2   := IMMEDIATE;
                 if (instr.opcode = cStoreOpcode) then
-                    decoded.destination := MEMORY;
-                    decoded.immediate   := std_logic_vector(resize(signed(instr.stype), 32));
+                    decoded.mem_operation := STORE;
+                    decoded.destination   := MEMORY;
+                    decoded.immediate     := std_logic_vector(resize(signed(instr.stype), 32));
                 else
-                    decoded.destination := REGISTERS;
-                    decoded.immediate   := std_logic_vector(resize(signed(instr.itype), 32));
+                    decoded.mem_operation := LOAD;
+                    decoded.destination   := REGISTERS;
+                    decoded.immediate     := std_logic_vector(resize(signed(instr.itype), 32));
                 end if;
                 
+                case (instr.funct3) is
+                    when "000" =>
+                        decoded.mem_access := BYTE_ACCESS;
+                    when "001" =>
+                        decoded.mem_access := HALF_WORD_ACCESS;
+                    when "010" =>
+                        decoded.mem_access := WORD_ACCESS;
+                    when "100" =>
+                        decoded.mem_access := UBYTE_ACCESS;
+                    when "101" =>
+                        decoded.mem_access := UHALF_WORD_ACCESS;
+                    when others =>
+                        assert false report "ControlEngine::contextual_decode: Malformed Instruction" severity failure;
+                        decoded.mem_access := BYTE_ACCESS;
+                
+                end case;
 
                 -- For loads and stores, we're using the ALU to add the immediate to
                 -- regs[rs1], so we use the ADD operation.
@@ -259,12 +274,11 @@ architecture rtl of ControlEngine is
                 -- Despite using the immediate anyway as part of the jump, from the 
                 -- perspective of the ALU, this is not an is_immed because it functionally
                 -- performs SLT, however, the branch does still use the immediate.
-                decoded.is_immed  := false;
                 decoded.source2   := REGISTERS;
 
                 -- We precompute the new PC here since we have everything we need to do that.
-                decoded.is_jump_branch := BRANCH;
-                decoded.new_pc         := pc + unsigned(resize(signed(instr.btype), 32));
+                decoded.jump_branch := BRANCH;
+                decoded.new_pc      := pc + unsigned(resize(signed(instr.btype), 32));
                 -- Also, indicate the condition we're looking for for the branch.
                 case instr.funct3 is
                     when "000" =>
@@ -299,16 +313,15 @@ architecture rtl of ControlEngine is
                 decoded.unit := ALU;
                 decoded.destination := REGISTERS;
 
-                decoded.is_immed  := true;
-                decoded.source2   := IMMEDIATE;
+                decoded.source2 := IMMEDIATE;
                 if (instr.opcode = cJumpOpcode) then
                     -- We precompute the new PC here since we have everything we need to do that.
                     -- Meanwhile, since JAL also returns the post-jump PC, produce that by changing the source
                     -- and setting the immediate to 4, so that the ALU will produce this value.
-                    decoded.source1        := PROGRAM_COUNTER;
-                    decoded.new_pc         := pc + unsigned(resize(signed(instr.jtype), 32));
-                    decoded.is_jump_branch := JAL;
-                    decoded.immediate      := std_logic_vector(to_unsigned(4, 32));
+                    decoded.source1     := PROGRAM_COUNTER;
+                    decoded.new_pc      := pc + unsigned(resize(signed(instr.jtype), 32));
+                    decoded.jump_branch := JAL;
+                    decoded.immediate   := std_logic_vector(to_unsigned(4, 32));
                 elsif (instr.opcode = cJumpRegOpcode) then
                     -- JALR is a thorn in my side. In this case, we need to use a register plus the itype
                     -- immediate to compute the new pc, but we also still need to compute the post-jump PC.
@@ -317,10 +330,10 @@ architecture rtl of ControlEngine is
 
                     -- Note to self: we could add an additional port to the register file to index and grab rs1,
                     -- but we would need to be careful of hazards.
-                    decoded.source1        := REGISTERS;
-                    decoded.new_pc         := pc + 4;
-                    decoded.is_jump_branch := JALR;
-                    decoded.immediate := std_logic_vector(resize(signed(instr.itype), 32));
+                    decoded.source1     := REGISTERS;
+                    decoded.new_pc      := pc + 4;
+                    decoded.jump_branch := JALR;
+                    decoded.immediate   := std_logic_vector(resize(signed(instr.itype), 32));
                 elsif (instr.opcode = cAuipcOpcode) then
                     decoded.source1   := PROGRAM_COUNTER;
                     decoded.immediate := std_logic_vector(resize(signed(instr.utype), 32));
@@ -353,11 +366,10 @@ architecture rtl of ControlEngine is
             operation      => NULL_OP,
             source1        => REGISTERS,
             source2        => REGISTERS,
-            is_immed       => false,
             immediate      => (others => '0'),
-            is_memory      => false,
-            memoperation   => LOAD_BYTE,
-            is_jump_branch => NOT_JUMP,
+            mem_operation  => NULL_OP,
+            mem_access     => BYTE_ACCESS,
+            jump_branch    => NOT_JUMP,
             condition      => NO_COND,
             new_pc         => (others => '0'),
             destination    => REGISTERS
