@@ -127,6 +127,7 @@ architecture rtl of Datapath is
     type memaccess_stage_t is record
         status   : stage_status_t;
         exec_res : std_logic_vector(31 downto 0);
+        mem_res  : std_logic_vector(31 downto 0);
     end record memaccess_stage_t;
     signal memaccess : memaccess_stage_t;
 
@@ -448,6 +449,17 @@ begin
                         memaccess.exec_res <= exec.mext_res;
                     elsif (exec.status.instr.destination = REGISTERS) then
                         memaccess.exec_res <= exec.alu_res;
+                    end if;
+
+                    if (exec.status.instr.mem_operation /= NULL_OP) then
+                        if (mem_valid = '1') then
+                            -- If we got a cache hit (which initially with this design we won't)
+                            -- then we can move on with our lives, merrily chugging away.
+                            memaccess.mem_res <= mem_res;
+                        else
+                            -- Otherwise, we're stalled until the memory unit returns some data.
+                            memaccess.status.stall_reason <= MEMORY_STALL;
+                        end if;
                     end if;
 
                 elsif (global_stall_bus(cMemAccessIndex) = '1') then

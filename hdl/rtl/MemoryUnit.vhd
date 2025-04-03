@@ -64,9 +64,60 @@ entity MemoryUnit is
 end entity MemoryUnit;
 
 architecture rtl of MemoryUnit is
-    
+    type state_t is (IDLE, PERFORM_AXI_WRITE, PERFORM_AXI_READ);
+    signal state : state_t := IDLE;
 begin
     
-    
+    StateMachine: process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_resetn = '0') then
+                
+            else
+                case state is
+                    when IDLE =>
+                        if (i_decoded.mem_operation /= NULL_OP) then
+                            -- If we're not a NULL_OP, we're doing a memory access of some kind.
+
+                            case (i_decoded.mem_access) is
+                                when BYTE_ACCESS | UBYTE_ACCESS =>
+                                    -- We don't need to check the alignment of the address
+                                    
+                                when HALF_WORD_ACCESS | UHALF_WORD_ACCESS | WORD_ACCESS =>
+                                    -- We do need to check the alignment of the address. 
+                                    -- If misaligned, we will stall and attempt two accesses.
+                            
+                            end case;
+
+                        end if;
+
+                        if (i_decoded.mem_operation = STORE) then
+                            state <= PERFORM_AXI_WRITE;
+                        end if;
+
+                        if (i_decoded.mem_operation = STORE) then
+                            state <= PERFORM_AXI_READ;
+                        end if;
+                
+                    when others =>
+                        
+                
+                end case;
+            end if;
+        end if;
+    end process StateMachine;
+
+    -- Integrate L1dCache here. This needs to do the following:
+    -- 1. Read/Write to a BRAM in a single cycle that contains:
+    --      - valid bit
+    --      - dirty bit
+    --      - tag
+    --      - cacheline
+    -- For first iteration, use a direct mapped cache. Other architectures
+    -- will be evaluated later.
+
+    -- Hot take, but could we also integrate memory mapped peripherals
+    -- here? Specifically high performance ones, like timers and stuff that
+    -- would otherwise have to be placed on the AXI bus?
     
 end architecture rtl;

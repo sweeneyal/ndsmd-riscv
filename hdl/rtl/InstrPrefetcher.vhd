@@ -428,5 +428,13 @@ begin
             end if;
         end if;
     end process StateMachine;
+
+    -- TODO: Integrate L1iCache here. L1iCache needs to do the following:
+    -- 1. Within a single CC, read a BRAM containing:
+    --      - valid bit
+    --      - tag
+    --      - cacheline
+    -- For the first iteration, use a direct mapped cache. 
+    -- Other cache architectures can be evaluated later.
     
 end architecture rtl;
