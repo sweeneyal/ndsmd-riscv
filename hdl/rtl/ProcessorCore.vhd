@@ -38,7 +38,12 @@ entity ProcessorCore is
         -- the severity of the error caused by pc update not aligned to a multiple of 4;
         -- this normally is a failure, but during testing with random instruction generation,
         -- this is downgraded to a warning.
-        cPrefetch_PcMisalignmentSeverity : severity_level := failure
+        cPrefetch_PcMisalignmentSeverity : severity_level := failure;
+
+        -- the width of of the address bus
+        cMemoryUnit_AddressWidth_b  : natural := 32;
+        -- the size of the cache line (aka cache block size)
+        cMemoryUnit_CachelineSize_B : natural := 16
     );
     port (
         -- system clock frequency
@@ -73,7 +78,7 @@ entity ProcessorCore is
         -------------------------------------------------------
         -- AXI-like interface to allow for easier implementation
         -- address bus for requesting an address
-        o_data_awaddr : out std_logic_vector(31 downto 0);
+        o_data_awaddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
         -- protection level of the transaction
         o_data_awprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -82,9 +87,9 @@ entity ProcessorCore is
         i_data_awready : in std_logic;
 
         -- write data bus
-        o_data_wdata  : out std_logic_vector(31 downto 0);
+        o_data_wdata  : out std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
         -- write data strobe
-        o_data_wstrb : out std_logic_vector(3 downto 0);
+        o_data_wstrb : out std_logic_vector(cMemoryUnit_CachelineSize_B - 1 downto 0);
         -- write valid
         o_data_wvalid : out std_logic;
         -- write ready
@@ -98,7 +103,7 @@ entity ProcessorCore is
         o_data_bready : out std_logic;
 
         -- address bus for requesting an address
-        o_data_araddr : out std_logic_vector(31 downto 0);
+        o_data_araddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
         -- protection level of the transaction
         o_data_arprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -107,7 +112,7 @@ entity ProcessorCore is
         i_data_arready : in std_logic;
 
         -- returned instruction data bus
-        i_data_rdata  : in std_logic_vector(31 downto 0);
+        i_data_rdata  : in std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
         -- response indicating error occurred, if any
         i_data_rresp : in std_logic_vector(1 downto 0);
         -- valid signal indicating that instruction data is valid

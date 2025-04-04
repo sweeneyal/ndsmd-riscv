@@ -36,6 +36,10 @@ library ndsmd_riscv;
     use ndsmd_riscv.DatapathUtility.all;
 
 entity Datapath is
+    generic (
+        cMemoryUnit_AddressWidth_b  : natural := 32;
+        cMemoryUnit_CachelineSize_B : natural := 16
+    );
     port (
         i_clk : in std_logic;
         i_resetn : in std_logic;
@@ -48,7 +52,7 @@ entity Datapath is
 
         -- AXI-like interface to allow for easier implementation
         -- address bus for requesting an address
-        o_data_awaddr : out std_logic_vector(31 downto 0);
+        o_data_awaddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
         -- protection level of the transaction
         o_data_awprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -57,9 +61,9 @@ entity Datapath is
         i_data_awready : in std_logic;
 
         -- write data bus
-        o_data_wdata  : out std_logic_vector(31 downto 0);
+        o_data_wdata  : out std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
         -- write data strobe
-        o_data_wstrb : out std_logic_vector(3 downto 0);
+        o_data_wstrb : out std_logic_vector(cMemoryUnit_CachelineSize_B - 1 downto 0);
         -- write valid
         o_data_wvalid : out std_logic;
         -- write ready
@@ -73,7 +77,7 @@ entity Datapath is
         o_data_bready : out std_logic;
 
         -- address bus for requesting an address
-        o_data_araddr : out std_logic_vector(31 downto 0);
+        o_data_araddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
         -- protection level of the transaction
         o_data_arprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -82,7 +86,7 @@ entity Datapath is
         i_data_arready : in std_logic;
 
         -- returned instruction data bus
-        i_data_rdata  : in std_logic_vector(31 downto 0);
+        i_data_rdata  : in std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
         -- response indicating error occurred, if any
         i_data_rresp : in std_logic_vector(1 downto 0);
         -- valid signal indicating that instruction data is valid
