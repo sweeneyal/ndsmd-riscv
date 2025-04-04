@@ -75,6 +75,7 @@ architecture rtl of MemoryUnit is
 
     type state_t is (IDLE, PERFORM_AXI_WRITE, PERFORM_AXI_READ);
     signal state : state_t := IDLE;
+    signal stored_addr : std_logic_vector(cAddressWidth_b - 1 downto 0) := (others => '0');
     signal stored_data : std_logic_vector(31 downto 0) := (others => '0');
     signal stored_decoded : decoded_instr_t;
 begin
@@ -82,6 +83,7 @@ begin
     StateMachine: process(i_clk)
         variable lsb : natural range 0 to cCachelineSize_B - 1 := 0;
         variable misaligned : std_logic := '0';
+        variable prev_misaligned : std_logic := '0';
         variable axi_transactions : std_logic_vector(2 downto 0) := "000";
     begin
         if rising_edge(i_clk) then
@@ -100,6 +102,7 @@ begin
                         if (i_decoded.mem_operation /= NULL_OP) then
                             -- If we're not a NULL_OP, we're doing a memory access of some kind.
 
+                            stored_addr <= i_addr;
                             stored_data <= i_data;
                             stored_decoded <= i_decoded;
 
@@ -238,6 +241,93 @@ begin
 
                             else
                                 -- If we don't have any more outstanding reads, go to idle.
+                                state <= IDLE;
+                            end if;
+                        end if;
+
+                    when PERFORM_AXI_READ =>
+                        if (i_data_arready = '1') then
+                            o_data_arvalid <= '0';
+                            axi_transactions(0) := '1';
+                        end if;
+
+                        if (i_data_rvalid = '1') then
+                            
+                            case (stored_decoded.mem_access) is
+                                when BYTE_ACCESS =>
+                                    -- No such thing as a misaligned byte, so just grab the byte we need and sign extend it
+                                    o_res(31 downto 0) <= std_logic_vector(
+                                        resize(signed(i_data_rdata(8 * (lsb + 1) - 1 downto 8 * lsb)), 32)
+                                        );
+                                when UBYTE_ACCESS =>
+                                    -- No such thing as a misaligned byte, so just grab the byte we need and zero pad it
+                                    o_res(31 downto 0) <= std_logic_vector(
+                                        resize(unsigned(i_data_rdata(8 * (lsb + 1) - 1 downto 8 * lsb)), 32)
+                                        );
+                                when HALF_WORD_ACCESS =>
+                                    if (misaligned = '1') then
+                                        -- When misaligned, grab the byte we can and throw it in the data bus.
+                                        o_res(7 downto 0) <= i_data_rdata(8 * (lsb + 1) - 1 downto 8 * lsb);
+                                    elsif (prev_misaligned = '1') then
+                                        -- On the second read to finish the misaligned access, grab the bottom byte and
+                                        -- sign extend it, throwing it on the data bus.
+                                        o_res(31 downto 8) <= std_logic_vector(
+                                            resize(signed(i_data_rdata(7 downto 0)), 24)
+                                            );
+                                    else
+                                        -- We can just grab both bytes and sign extend them.
+                                        o_res(31 downto 0) <= std_logic_vector(
+                                            resize(signed(i_data_rdata(8 * (lsb + 2) - 1 downto 8 * lsb)), 32)
+                                            );
+                                    end if;
+                                when UHALF_WORD_ACCESS =>
+                                    if (misaligned = '1') then
+                                        -- When misaligned, grab the byte we can and throw it in the data bus.
+                                        o_res(7 downto 0) <= i_data_rdata(8 * (lsb + 1) - 1 downto 8 * lsb);
+                                    elsif (prev_misaligned = '1') then
+                                        -- On the second read to finish the misaligned access, grab the bottom byte and
+                                        -- zero pad it, throwing it on the data bus.
+                                        o_res(31 downto 8) <= std_logic_vector(
+                                            resize(unsigned(i_data_rdata(7 downto 0)), 24)
+                                            );
+                                    else
+                                        -- We can just grab both bytes and zero pad them.
+                                        o_res(31 downto 0) <= std_logic_vector(
+                                            resize(unsigned(i_data_rdata(8 * (lsb + 2) - 1 downto 8 * lsb)), 32)
+                                            );
+                                    end if;
+                                
+                                when WORD_ACCESS =>
+                                    if (misaligned = '1') then
+                                        -- When misaligned, grab the bytes we can and throw them in the data bus.
+                                        o_res(8 * (cCachelineSize_B - lsb) - 1 downto 0) <= i_data_rdata(8 * cCachelineSize_B - 1 downto 8 * lsb);
+                                    elsif (prev_misaligned = '1') then
+                                        -- On the second access, we need to get the other bytes that we did not access the first time.
+                                        o_res(31 downto 8 * (cCachelineSize_B - lsb)) <= i_data_rdata(8 * (4 - (cCachelineSize_B - lsb)) - 1 downto 0);
+                                    else
+                                        -- We can just grab all four bytes.
+                                        o_res(31 downto 0) <= i_data_rdata(8 * (lsb + 4) - 1 downto 8 * lsb);
+                                    end if;
+                            
+                            end case;
+
+                            o_data_rready <= '0';
+                            axi_transactions(1) := '1';
+                        end if;
+
+                        if (axi_transactions = "011") then
+                            if (misaligned = '1') then
+                                
+                                -- Clear the misaligned flag, and all the axi transactions registers
+                                -- since we will repeat this state for the second axi transfer of the
+                                -- upper bytes.
+                                misaligned       := '0';
+                                prev_misaligned  := '1';
+                                axi_transactions := "000";
+                                state <= PERFORM_AXI_READ;
+                            else
+                                -- If we don't have any more outstanding reads, go to idle.
+                                prev_misaligned := '0';
                                 state <= IDLE;
                             end if;
                         end if;
