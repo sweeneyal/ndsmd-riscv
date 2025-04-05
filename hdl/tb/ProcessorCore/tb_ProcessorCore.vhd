@@ -111,38 +111,39 @@ begin
         o_data_rready => data_rready
     );
 
-    -- Need to make this RAM work with the cacheline generic too.
-    -- eRam : entity tb_ndsmd_riscv.RandomAxiRam
-    -- generic map (
-    --     cCheckUninitialized => false,
-    --     cVerboseMode => false
-    -- ) port map (
-    --     i_clk         => stimuli.clk,
-    --     i_resetn      => stimuli.resetn,
+    eRam : entity tb_ndsmd_riscv.RandomAxiRam
+    generic map (
+        cAddressWidth_b  => cMemoryUnit_AddressWidth_b,
+        cCachelineSize_B => cMemoryUnit_CachelineSize_B,
+        cCheckUninitialized => false,
+        cVerboseMode => false
+    ) port map (
+        i_clk         => stimuli.clk,
+        i_resetn      => stimuli.resetn,
 
-    --     i_s_axi_awaddr  => data_awaddr,
-    --     i_s_axi_awprot  => data_awprot,
-    --     i_s_axi_awvalid => data_awvalid,
-    --     o_s_axi_awready => data_awready,
+        i_s_axi_awaddr  => data_awaddr,
+        i_s_axi_awprot  => data_awprot,
+        i_s_axi_awvalid => data_awvalid,
+        o_s_axi_awready => data_awready,
 
-    --     i_s_axi_wdata   => data_wdata,
-    --     i_s_axi_wstrb   => data_wstrb,
-    --     i_s_axi_wvalid  => data_wvalid,
-    --     o_s_axi_wready  => data_wready,
+        i_s_axi_wdata   => data_wdata,
+        i_s_axi_wstrb   => data_wstrb,
+        i_s_axi_wvalid  => data_wvalid,
+        o_s_axi_wready  => data_wready,
 
-    --     o_s_axi_bresp   => data_bresp,
-    --     o_s_axi_bvalid  => data_bvalid,
-    --     i_s_axi_bready  => data_bready,
+        o_s_axi_bresp   => data_bresp,
+        o_s_axi_bvalid  => data_bvalid,
+        i_s_axi_bready  => data_bready,
 
-    --     i_s_axi_araddr  => data_araddr,
-    --     i_s_axi_arprot  => data_arprot,
-    --     i_s_axi_arvalid => data_arvalid,
-    --     o_s_axi_arready => data_arready,
+        i_s_axi_araddr  => data_araddr,
+        i_s_axi_arprot  => data_arprot,
+        i_s_axi_arvalid => data_arvalid,
+        o_s_axi_arready => data_arready,
 
-    --     o_s_axi_rdata   => data_rdata,
-    --     o_s_axi_rresp   => data_rresp,
-    --     o_s_axi_rvalid  => data_rvalid,
-    --     i_s_axi_rready  => data_rready
-    -- );
+        o_s_axi_rdata   => data_rdata,
+        o_s_axi_rresp   => data_rresp,
+        o_s_axi_rvalid  => data_rvalid,
+        i_s_axi_rready  => data_rready
+    );
     
 end architecture tb;

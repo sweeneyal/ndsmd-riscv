@@ -78,6 +78,10 @@ architecture rtl of MemoryUnit is
     signal stored_addr : std_logic_vector(cAddressWidth_b - 1 downto 0) := (others => '0');
     signal stored_data : std_logic_vector(31 downto 0) := (others => '0');
     signal stored_decoded : decoded_instr_t;
+
+    signal dbg_axi_transactions : std_logic_vector(2 downto 0) := "000";
+    signal dbg_misaligned : std_logic := '0';
+    signal dbg_prev_misaligned : std_logic := '0';
 begin
     
     StateMachine: process(i_clk)
@@ -98,6 +102,12 @@ begin
                         o_data_awvalid <= '0';
                         o_data_bready  <= '0';
                         o_data_rready  <= '0';
+                        o_data_wdata   <= (others => '0');
+                        o_data_arprot  <= (others => '0');
+                        o_data_awprot  <= (others => '0');
+
+                        -- TODO: Add cache reads/writes
+                        o_valid <= '0';
 
                         if (i_decoded.mem_operation /= NULL_OP) then
                             -- If we're not a NULL_OP, we're doing a memory access of some kind.
@@ -209,14 +219,24 @@ begin
                         end if;
 
                         if (axi_transactions = "111") then
+                            axi_transactions := "000";
+
                             if (misaligned = '1') then
                                 
                                 -- Clear the misaligned flag, and all the axi transactions registers
                                 -- since we will repeat this state for the second axi transfer of the
                                 -- upper bytes.
                                 misaligned       := '0';
-                                axi_transactions := "000";
                                 state <= PERFORM_AXI_WRITE;
+
+                                -- Get the address of the next block up, which is the upper part of the address sliced,
+                                -- cast to unsigned, incremented, and then padded with zeros.
+                                o_data_awaddr <= std_logic_vector(
+                                    unsigned(stored_addr(cAddressWidth_b - 1 downto cCachelineIndexWidth_b)) + 1
+                                    ) & (cCachelineIndexWidth_b - 1 downto 0 => '0');
+                                o_data_awvalid <= '1';
+                                o_data_wvalid  <= '1';
+                                o_data_bready  <= '1';
 
                                 case (stored_decoded.mem_access) is
                                     when BYTE_ACCESS | UBYTE_ACCESS =>
@@ -240,8 +260,9 @@ begin
                                 end case;
 
                             else
-                                -- If we don't have any more outstanding reads, go to idle.
-                                state <= IDLE;
+                                o_res   <= (others => '0');
+                                o_valid <= '1';
+                                state   <= IDLE;
                             end if;
                         end if;
 
@@ -316,6 +337,8 @@ begin
                         end if;
 
                         if (axi_transactions = "011") then
+                            axi_transactions := "000";
+
                             if (misaligned = '1') then
                                 
                                 -- Clear the misaligned flag, and all the axi transactions registers
@@ -323,11 +346,19 @@ begin
                                 -- upper bytes.
                                 misaligned       := '0';
                                 prev_misaligned  := '1';
-                                axi_transactions := "000";
                                 state <= PERFORM_AXI_READ;
+
+                                -- Get the address of the next block up, which is the upper part of the address sliced,
+                                -- cast to unsigned, incremented, and then padded with zeros.
+                                o_data_araddr <= std_logic_vector(
+                                    unsigned(stored_addr(cAddressWidth_b - 1 downto cCachelineIndexWidth_b)) + 1
+                                    ) & (cCachelineIndexWidth_b - 1 downto 0 => '0');
+                                o_data_arvalid <= '1';
+                                o_data_rready  <= '1';
                             else
                                 -- If we don't have any more outstanding reads, go to idle.
                                 prev_misaligned := '0';
+                                o_valid <= '1';
                                 state <= IDLE;
                             end if;
                         end if;
@@ -337,6 +368,9 @@ begin
                 
                 end case;
             end if;
+            dbg_axi_transactions <= axi_transactions;
+            dbg_misaligned <= misaligned;
+            dbg_prev_misaligned <= prev_misaligned;
         end if;
     end process StateMachine;
 

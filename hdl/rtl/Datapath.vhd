@@ -474,7 +474,9 @@ begin
 
                     -- If we're the one thats stalled, check if the stall has been resolved.
                     if (memaccess.status.stall_reason = MEMORY_STALL) then
-                        memaccess.status.stall_reason <= NOT_STALLED;
+                        if (mem_valid = '1') then
+                            memaccess.status.stall_reason <= NOT_STALLED;
+                        end if;
                     end if;
 
                 elsif (global_stall_bus(cMemAccessIndex downto cExecuteIndex) = "01") then
