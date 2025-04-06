@@ -34,6 +34,7 @@ package DatapathUtility is
     end record stage_status_t;
 
     type datapath_status_t is record
+        decode    : stage_status_t;
         execute   : stage_status_t;
         memaccess : stage_status_t;
         writeback : stage_status_t;

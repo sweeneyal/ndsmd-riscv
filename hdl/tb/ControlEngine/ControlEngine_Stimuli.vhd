@@ -82,6 +82,28 @@ begin
                 stimuli.valid  <= '0';
                 stimuli.instr  <= decode(x"00000000");
                 stimuli.status <= datapath_status_t'(
+                    decode   => stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base           => decode(x"00000000"),
+                            unit           => ALU,
+                            operation      => NULL_OP,
+                            source1        => REGISTERS,
+                            source2        => REGISTERS,
+                            immediate      => (others => '0'),
+                            mem_operation  => NULL_OP,
+                            mem_access     => BYTE_ACCESS,
+                            jump_branch => NOT_JUMP,
+                            condition      => NO_COND,
+                            new_pc         => (others => '0'),
+                            destination    => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    ),
                     execute   => stage_status_t'(
                         id           => -1,
                         pc           => (others => '0'),
@@ -217,6 +239,28 @@ begin
                 stimuli.valid  <= '0';
                 stimuli.instr  <= decode(x"00000000");
                 stimuli.status <= datapath_status_t'(
+                    decode   => stage_status_t'(
+                        id           => -1,
+                        pc           => (others => '0'),
+                        instr        => decoded_instr_t'(
+                            base           => decode(x"00000000"),
+                            unit           => ALU,
+                            operation      => NULL_OP,
+                            source1        => REGISTERS,
+                            source2        => REGISTERS,
+                            immediate      => (others => '0'),
+                            mem_operation  => NULL_OP,
+                            mem_access     => BYTE_ACCESS,
+                            jump_branch => NOT_JUMP,
+                            condition      => NO_COND,
+                            new_pc         => (others => '0'),
+                            destination    => REGISTERS
+                        ),
+                        valid        => '0',
+                        stall_reason => NOT_STALLED,
+                        rs1_hzd      => -1,
+                        rs2_hzd      => -1
+                    ),
                     execute   => stage_status_t'(
                         id           => -1,
                         pc           => (others => '0'),

@@ -15,6 +15,8 @@ library vunit_lib;
 library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
+    use std.textio.all;
+    use ieee.std_logic_textio.all;
 
 library osvvm;
     use osvvm.TbUtilPkg.all;
@@ -56,6 +58,16 @@ architecture rtl of ProcessorCore_Stimuli is
     --         end if;
     --     end loop;
     -- end procedure;
+
+    package InstructionListPackage is new simtools.GenericListPkg
+        generic map (element_t => std_logic_vector(31 downto 0));
+    shared variable instructions : InstructionListPackage.list;
+
+    package AddressListPackage is new simtools.GenericListPkg
+        generic map (element_t => std_logic_vector(31 downto 0));
+    shared variable addresses : AddressListPackage.list;
+
+    file file_instr : text;
 begin
     
     o_stimuli <= stimuli;
@@ -72,6 +84,10 @@ begin
         variable rand : RandomPType;
         variable idx  : natural := 0;
         variable rand_wait : natural := 0;
+
+        variable iline : line;
+        variable instr : std_logic_vector(31 downto 0);
+        variable addr  : std_logic_vector(31 downto 0);
     begin
         test_runner_setup(runner, nested_runner_cfg);
   
@@ -110,6 +126,60 @@ begin
                         stimuli.instr_rvalid <= '1';
                         stimuli.instr_rresp  <= "00";
                     end if;
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+                end loop;
+            elsif run("t_matmult") then
+                info("Running matmult test");
+
+                file_open(file_instr, "./hdl/tb/ProcessorCore/matmult.hex", read_mode);
+
+                while not endfile(file_instr) loop
+                    readline(file_instr, iline);
+                    hread(iline, instr);
+                    instructions.append(instr);
+                end loop;
+
+                instructions.append(x"00000013");
+                instructions.append(x"00000013");
+                instructions.append(x"00000013");
+                instructions.append(x"00000013");
+                instructions.append(x"00000013");
+                instructions.append(x"00000013");
+
+                file_close(file_instr);
+
+                stimuli.resetn <= '0';
+                stimuli.instr_arready <= '0';
+                stimuli.instr_rresp   <= "00";
+                stimuli.instr_rdata   <= (others => '0');
+                stimuli.instr_rvalid  <= '0';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                stimuli.resetn <= '1';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                for ii in 0 to 10000 loop
+                    if (i_responses.instr_arvalid = '1') then
+                        addresses.append(i_responses.instr_araddr);
+                        stimuli.instr_arready <= '1';
+                    end if;
+
+                    if (i_responses.instr_rready = '1' and addresses.length > 0) then
+                        addr := addresses.get(0);
+                        addresses.delete(0);
+                        report "Reading address " & to_hstring(addr);
+
+                        stimuli.instr_rdata  <= instructions.get(to_natural(addr(31 downto 2)));
+                        stimuli.instr_rvalid <= '1';
+                        stimuli.instr_rresp  <= "00";
+                    else
+                        stimuli.instr_rvalid <= '0';
+                    end if;
+
                     wait until rising_edge(clk);
                     wait for 100 ps;
                 end loop;

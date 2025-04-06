@@ -379,7 +379,7 @@ architecture rtl of ControlEngine is
         return decoded;
     end function;
 
-    function find_hazards(source : source_t; rsx : std_logic_vector(4 downto 0); status : datapath_status_t) return issue_id_t is
+    function find_hazards(opcode : std_logic_vector(6 downto 0); source : source_t; rsx : std_logic_vector(4 downto 0); status : datapath_status_t) return issue_id_t is
     begin
         -- Identify data hazards amongst in-flight instructions
         -- Note: this version is assuming that we are not operating as a tomasulo processor with numerous
@@ -387,14 +387,18 @@ architecture rtl of ControlEngine is
         -- (e.g. division) will therefore force the entire CPU to stall. Hence, why adding support for 
         -- tomasulo is invaluable.
 
-        if (source = REGISTERS and rsx /= "00000") then
+        if ((source = REGISTERS or opcode = cStoreOpcode) and rsx /= "00000") then
             -- Check all stage statuses to see if another instruction
             -- has the destination = decoded.base.rs1.
 
-            if ((status.execute.instr.base.rd = rsx) and status.execute.instr.destination = REGISTERS) then
+            if ((status.decode.instr.base.rd = rsx) and status.decode.instr.destination = REGISTERS) then
+                return status.decode.id;
+            elsif ((status.execute.instr.base.rd = rsx) and status.execute.instr.destination = REGISTERS) then
                 return status.execute.id;
             elsif ((status.memaccess.instr.base.rd = rsx) and status.memaccess.instr.destination = REGISTERS) then
                 return status.memaccess.id;
+            elsif ((status.writeback.instr.base.rd = rsx) and status.writeback.instr.destination = REGISTERS) then
+                return status.writeback.id;
             end if;
         end if;
 
@@ -475,8 +479,8 @@ begin
                         o_issued <= stalled;
 
                         -- Identify any current hazards in the datapath
-                        rs1_hzd := find_hazards(stalled.instr.source1, stalled.instr.base.rs1, i_status);
-                        rs2_hzd := find_hazards(stalled.instr.source2, stalled.instr.base.rs2, i_status);
+                        rs1_hzd := find_hazards(stalled.instr.base.opcode, stalled.instr.source1, stalled.instr.base.rs1, i_status);
+                        rs2_hzd := find_hazards(stalled.instr.base.opcode, stalled.instr.source2, stalled.instr.base.rs2, i_status);
 
                         -- Link the hazards to the issued instruction.
                         o_issued.rs1_hzd <= rs1_hzd;
@@ -490,6 +494,8 @@ begin
                             stalled.valid  <= '0';
                             cpu_ready      <= '1';
                         else
+                            -- Invalidate the ID temporarily since we cannot issue due to hazards.
+                            o_issued.id    <= -1;
                             o_issued.valid <= '0';
                             stalled.valid  <= '1';
                             cpu_ready      <= '0';
@@ -499,8 +505,11 @@ begin
                         decoded := contextual_decode(i_instr, i_pc);
 
                         -- Go ahead and fill out the issued output, and set it to not valid.
+                        -- Since it's not valid, we dont give it its assigned ID yet, since if we
+                        -- put it in the issued state and we have to stall for hazards,
+                        -- we'll accidentally stall ourselves permanently.
                         o_issued <= stage_status_t'(
-                            id           => id,
+                            id           => -1,
                             pc           => i_pc,
                             instr        => decoded,
                             valid        => '0',
@@ -521,8 +530,8 @@ begin
                         );
 
                         -- Identify the hazards of the instruction.
-                        rs1_hzd := find_hazards(decoded.source1, decoded.base.rs1, i_status);
-                        rs2_hzd := find_hazards(decoded.source2, decoded.base.rs2, i_status);
+                        rs1_hzd := find_hazards(decoded.base.opcode, decoded.source1, decoded.base.rs1, i_status);
+                        rs2_hzd := find_hazards(decoded.base.opcode, decoded.source2, decoded.base.rs2, i_status);
 
                         -- Link the hazards to the issued instruction.
                         o_issued.rs1_hzd <= rs1_hzd;
@@ -532,6 +541,8 @@ begin
                         -- This is to avoid needing complex data hazard handling logic, also known as an excuse
                         -- in order to meet deadlines.
                         if (rs1_hzd = -1 and rs2_hzd = -1) then
+                            -- If there are no hazards, we allow it to have its ID now.
+                            o_issued.id    <= id;
                             o_issued.valid <= '1';
                             stalled.valid  <= '0';
                             cpu_ready      <= '1';

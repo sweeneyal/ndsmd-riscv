@@ -150,7 +150,8 @@ architecture rtl of Datapath is
 begin
 
     o_status <= datapath_status_t'(
-        execute => exec.status,
+        decode    => i_issued,
+        execute   => exec.status,
         memaccess => memaccess.status,
         writeback => writeback.status
     );
@@ -475,6 +476,7 @@ begin
                     -- If we're the one thats stalled, check if the stall has been resolved.
                     if (memaccess.status.stall_reason = MEMORY_STALL) then
                         if (mem_valid = '1') then
+                            memaccess.mem_res <= mem_res;
                             memaccess.status.stall_reason <= NOT_STALLED;
                         end if;
                     end if;
@@ -547,8 +549,12 @@ begin
                 -- decode stage is also not stalled, we can accept a new instruction.
                 if (global_stall_bus(cWritebackIndex downto cMemAccessIndex) = "00") then
                     writeback.status  <= memaccess.status;
-                    writeback.res     <= memaccess.exec_res;
-                    writeback.rdwen   <= bool2bit(memaccess.status.valid = '1' and memaccess.status.instr.destination = REGISTERS);
+                    if (memaccess.status.instr.mem_operation /= LOAD) then
+                        writeback.res <= memaccess.exec_res;
+                    else
+                        writeback.res <= memaccess.mem_res;
+                    end if;
+                    writeback.rdwen <= bool2bit(memaccess.status.valid = '1' and memaccess.status.instr.destination = REGISTERS);
 
                 elsif (global_stall_bus(cWritebackIndex) = '1') then
                     -- If we're stalled, we're either stalled because later stages are stalled or
