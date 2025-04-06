@@ -172,11 +172,7 @@ begin
 
                     o_valid <= '0';
 
-                    -- A future feature here would be to check if the sequence PC, 
-                    -- PC + 4, PC + 8 are contained in the prefetch at all,
-                    -- which could save some additional cycles for prefetches.
-                    -- However, a napkin analysis of this would indicate that this is probably
-                    -- a rare behavior, and violates the principle of "common case fast".
+                    -- The comment that was here was decidedly ignorant of caches.
                     if ((i_instr_arready and instr_arvalid) = '1') then
                         -- Forward propagate prefetch
                         for ii in cNumTransactions - 1 downto 1 loop
@@ -189,7 +185,7 @@ begin
                     end if;
 
                     instr_araddr  <= std_logic_vector(i_pc(31 downto 2)) & "00";
-                    instr_arvalid <= '1';
+                    instr_arvalid <= '0';
 
                     for ii in 0 to cNumTransactions - 1 loop
                         prefetch(ii).dropped := '1';

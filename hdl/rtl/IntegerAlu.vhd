@@ -75,10 +75,10 @@ begin
     begin
         o_eq <= bool2bit(i_opA = i_opB);
         if (i_decoded.operation = SLT) then
-            slt_res <= (31 downto 1 => '0') & bool2bit(signed(i_opA) > signed(i_opB));
+            slt_res <= (31 downto 1 => '0') & bool2bit(signed(i_opA) < signed(i_opB));
         else
             -- SLTU, as well as anything else, as again, if not selected will be ignored.
-            slt_res <= (31 downto 1 => '0') & bool2bit(unsigned(i_opA) > unsigned(i_opB));
+            slt_res <= (31 downto 1 => '0') & bool2bit(unsigned(i_opA) < unsigned(i_opB));
         end if;
     end process Slt_Sltu;
     

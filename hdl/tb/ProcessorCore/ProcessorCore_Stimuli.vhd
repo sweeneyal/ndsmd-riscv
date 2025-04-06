@@ -162,7 +162,7 @@ begin
                 wait until rising_edge(clk);
                 wait for 100 ps;
 
-                for ii in 0 to 10000 loop
+                for ii in 0 to 50000 loop
                     if (i_responses.instr_arvalid = '1') then
                         addresses.append(i_responses.instr_araddr);
                         stimuli.instr_arready <= '1';
