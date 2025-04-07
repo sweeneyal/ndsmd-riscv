@@ -28,7 +28,7 @@ package InstructionUtility is
         itype  : std_logic_vector(11 downto 0);
         stype  : std_logic_vector(11 downto 0);
         btype  : std_logic_vector(12 downto 0);
-        utype  : std_logic_vector(19 downto 0);
+        utype  : std_logic_vector(31 downto 0);
         jtype  : std_logic_vector(20 downto 0);
     end record instruction_t;
 
@@ -192,7 +192,7 @@ package body InstructionUtility is
 
     function get_utype(instr : std_logic_vector(31 downto 0)) return std_logic_vector is
     begin
-        return get_funct7(instr) & get_rs2(instr) & get_rs1(instr) & get_funct3(instr);
+        return get_funct7(instr) & get_rs2(instr) & get_rs1(instr) & get_funct3(instr) & (11 downto 0 => '0');
     end function;
 
     function get_btype(instr : std_logic_vector(31 downto 0)) return std_logic_vector is

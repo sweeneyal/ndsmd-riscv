@@ -391,13 +391,17 @@ architecture rtl of ControlEngine is
             -- Check all stage statuses to see if another instruction
             -- has the destination = decoded.base.rs1.
 
-            if ((status.decode.instr.base.rd = rsx) and status.decode.instr.destination = REGISTERS) then
+            if ((status.decode.instr.base.rd = rsx) 
+                    and status.decode.instr.destination = REGISTERS and status.decode.valid = '1') then
                 return status.decode.id;
-            elsif ((status.execute.instr.base.rd = rsx) and status.execute.instr.destination = REGISTERS) then
+            elsif ((status.execute.instr.base.rd = rsx) 
+                    and status.execute.instr.destination = REGISTERS and status.execute.valid = '1') then
                 return status.execute.id;
-            elsif ((status.memaccess.instr.base.rd = rsx) and status.memaccess.instr.destination = REGISTERS) then
+            elsif ((status.memaccess.instr.base.rd = rsx) 
+                    and status.memaccess.instr.destination = REGISTERS and status.memaccess.valid = '1') then
                 return status.memaccess.id;
-            elsif ((status.writeback.instr.base.rd = rsx) and status.writeback.instr.destination = REGISTERS) then
+            elsif ((status.writeback.instr.base.rd = rsx) 
+                    and status.writeback.instr.destination = REGISTERS and status.writeback.valid = '1') then
                 return status.writeback.id;
             end if;
         end if;

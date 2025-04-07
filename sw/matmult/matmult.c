@@ -4,9 +4,9 @@
 #define NROWS 4
 #define NCOLS NROWS
 
-int32_t a[NROWS][NCOLS];
-int32_t b[NROWS][NCOLS];
-int32_t c[NROWS][NCOLS];
+int32_t a[NROWS * NCOLS];
+int32_t b[NROWS * NCOLS];
+int32_t c[NROWS * NCOLS];
 
 #define _DEBUG_PRINT
 #define INFINITE_LOOP
@@ -40,7 +40,7 @@ void main()
     // Initalize the matrix A to the row index times the column index
     for (uint32_t i = 0; i < NROWS; i++)
         for (uint32_t j = 0; j < NCOLS; j++)
-            a[i][j] = i * j;
+            a[NROWS * i + j] = i * j;
 
     #if defined(DEBUG_PRINT)
     print_matrix(a);
@@ -49,7 +49,7 @@ void main()
     // Initalize the matrix B to the row index times the column index
     for (uint32_t i = 0; i < NROWS; i++)
         for (uint32_t j = 0; j < NCOLS; j++)
-            b[i][j] = i * j;
+            b[NROWS * i + j] = i * j;
 
     #if defined(DEBUG_PRINT)
     print_matrix(b);
@@ -58,7 +58,7 @@ void main()
     // Initalize the matrix C to all zeros in order to prepare for matrix multiplication
     for (uint32_t i = 0; i < NROWS; i++)
         for (uint32_t j = 0; j < NCOLS; j++)
-            c[i][j] = 0;
+            c[NROWS * i + j] = 0;
 
     #if defined(DEBUG_PRINT)
     print_matrix(c);
@@ -67,7 +67,7 @@ void main()
     for (uint32_t i = 0; i < NROWS; i++)
         for (uint32_t j = 0; j < NCOLS; j++)
             for (uint32_t k = 0; k < NCOLS; k++)
-                c[i][j] += a[i][k] * b[k][j];
+                c[NROWS * i + j] += a[NROWS * i + k] * b[NROWS * i + j];
 
     #if defined(DEBUG_PRINT)
     print_matrix(c);

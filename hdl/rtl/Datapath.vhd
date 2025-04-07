@@ -378,6 +378,7 @@ begin
         i_resetn => i_resetn,
 
         i_decoded => exec.status.instr,
+        i_valid   => exec.status.valid,
         i_addr    => exec.alu_res,
         i_data    => exec.reg_opB,
         o_res     => mem_res,

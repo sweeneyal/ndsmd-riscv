@@ -19,6 +19,7 @@ entity MemoryUnit is
         i_resetn : in std_logic;
 
         i_decoded : in  decoded_instr_t;
+        i_valid   : in  std_logic;
         i_addr    : in  std_logic_vector(31 downto 0);
         i_data    : in  std_logic_vector(31 downto 0);
         o_res     : out std_logic_vector(31 downto 0);
@@ -109,7 +110,7 @@ begin
                         -- TODO: Add cache reads/writes
                         o_valid <= '0';
 
-                        if (i_decoded.mem_operation /= NULL_OP) then
+                        if (i_decoded.mem_operation /= NULL_OP and i_valid = '1') then
                             -- If we're not a NULL_OP, we're doing a memory access of some kind.
 
                             stored_addr <= i_addr;

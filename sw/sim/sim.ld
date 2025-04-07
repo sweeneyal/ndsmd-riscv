@@ -6,6 +6,7 @@ SECTIONS
 {
     .text : { *(.text) }
     
+    . = 0x00005000;
     .data : { *(.data) }
     
     .bss : { *(.bss) }

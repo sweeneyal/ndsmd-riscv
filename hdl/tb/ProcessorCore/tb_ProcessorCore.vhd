@@ -116,7 +116,7 @@ begin
         cAddressWidth_b  => cMemoryUnit_AddressWidth_b,
         cCachelineSize_B => cMemoryUnit_CachelineSize_B,
         cCheckUninitialized => false,
-        cVerboseMode => false
+        cVerboseMode => true
     ) port map (
         i_clk         => stimuli.clk,
         i_resetn      => stimuli.resetn,
