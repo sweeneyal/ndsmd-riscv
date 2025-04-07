@@ -182,6 +182,7 @@ begin
                         prefetch(0).pc := pc & "00";
                         prefetch(0).valid := '1';
                         prefetch(0).dropped := '1';
+                        num_prefetches := num_prefetches + 1;
                     end if;
 
                     instr_araddr  <= std_logic_vector(i_pc(31 downto 2)) & "00";
@@ -190,6 +191,21 @@ begin
                     for ii in 0 to cNumTransactions - 1 loop
                         prefetch(ii).dropped := '1';
                     end loop;
+
+                    if ((i_instr_rvalid and instr_rready) = '1') then
+                        for ii in cNumTransactions - 1 downto 0 loop
+                            if (prefetch(ii).valid = '1') then
+                                -- In the rare case where a return comes in during a PC update, 
+                                -- all prefetches are already noted dropped, but the top
+                                -- valid one can just be invalidated.
+                                prefetch(ii).valid := '0';
+                                prefetch(ii).dropped := '0';
+                                num_prefetches := num_prefetches - 1;
+
+                                exit;
+                            end if;
+                        end loop;
+                    end if;
                 else
                     -- If the processor is ready for new instructions, we're ready for new instructions,
                     -- as long as there are no stalled instructions.
