@@ -41,6 +41,7 @@ entity MExtension is
         i_resetn : in std_logic;
 
         i_decoded : in decoded_instr_t;
+        i_valid   : in std_logic;
         i_opA     : in std_logic_vector(31 downto 0);
         i_opB     : in std_logic_vector(31 downto 0);
 
@@ -84,7 +85,7 @@ begin
         & bool2bit(i_decoded.operation = MULTIPLY_UPPER_UNS 
             or i_decoded.operation = MULTIPLY_UPPER_SU);
 
-    valid_enum  <= bool2bit(i_decoded.unit = MEXT);
+    valid_enum  <= bool2bit(i_decoded.unit = MEXT) and i_valid;
     signed_enum <= bool2bit(i_decoded.operation = DIVIDE or i_decoded.operation = REMAINDER);
 
     eDivider : entity ndsmd_riscv.DivisionUnit

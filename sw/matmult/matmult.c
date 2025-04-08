@@ -8,12 +8,12 @@ int32_t a[NROWS * NCOLS];
 int32_t b[NROWS * NCOLS];
 int32_t c[NROWS * NCOLS];
 
-#define _DEBUG_PRINT
+#define nDEBUG_PRINT
 #define INFINITE_LOOP
 
 #if defined(DEBUG_PRINT)
 
-void print_matrix(int32_t m[NROWS][NCOLS])
+void print_matrix(int32_t m[NROWS * NCOLS])
 {
     for (uint8_t i = 0; i < 100; i++)
     {
@@ -25,7 +25,7 @@ void print_matrix(int32_t m[NROWS][NCOLS])
     {
         for (uint32_t j = 0; j < NCOLS; j++)
         {
-            printf("%d ", m[i][j]);
+            printf("%d ", m[NROWS *i + j]);
         }
         printf("\n");
     }
@@ -67,7 +67,7 @@ void main()
     for (uint32_t i = 0; i < NROWS; i++)
         for (uint32_t j = 0; j < NCOLS; j++)
             for (uint32_t k = 0; k < NCOLS; k++)
-                c[NROWS * i + j] += a[NROWS * i + k] * b[NROWS * i + j];
+                c[NROWS * i + j] += a[NROWS * i + k] * b[NROWS * k + j];
 
     #if defined(DEBUG_PRINT)
     print_matrix(c);

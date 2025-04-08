@@ -221,6 +221,7 @@ begin
         i_resetn => i_resetn,
 
         i_decoded => i_issued.instr,
+        i_valid   => i_issued.valid,
         i_opA     => opA,
         i_opB     => opB,
 

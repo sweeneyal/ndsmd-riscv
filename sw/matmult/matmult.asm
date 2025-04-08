@@ -114,7 +114,7 @@ Disassembly of section .text:
  1a8:	00279793          	slli	a5,a5,0x2
  1ac:	00f707b3          	add	a5,a4,a5
  1b0:	0007a703          	lw	a4,0(a5)
- 1b4:	fd442783          	lw	a5,-44(s0)
+ 1b4:	fcc42783          	lw	a5,-52(s0)
  1b8:	00279613          	slli	a2,a5,0x2
  1bc:	fd042783          	lw	a5,-48(s0)
  1c0:	00f607b3          	add	a5,a2,a5
