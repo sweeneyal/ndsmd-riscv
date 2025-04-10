@@ -36,6 +36,9 @@ library ndsmd_riscv;
     use ndsmd_riscv.DatapathUtility.all;
 
 entity MExtension is
+    generic (
+        cEnableDivisionUnit : boolean := true
+    );
     port (
         i_clk : in std_logic;
         i_resetn : in std_logic;
@@ -88,18 +91,20 @@ begin
     valid_enum  <= bool2bit(i_decoded.unit = MEXT) and i_valid;
     signed_enum <= bool2bit(i_decoded.operation = DIVIDE or i_decoded.operation = REMAINDER);
 
-    eDivider : entity ndsmd_riscv.DivisionUnit
-    port map (
-        i_clk    => i_clk,
-        i_en     => valid_enum,
-        i_signed => signed_enum,
-        i_num    => i_opA,
-        i_denom  => i_opB,
-        o_div    => div_res,
-        o_rem    => rem_res,
-        o_error  => open, -- Error is not used, division is supposed to check its inputs
-        o_valid  => div_valid
-    );
+    gGenerateDivisionUnit: if (cEnableDivisionUnit) generate
+        eDivider : entity ndsmd_riscv.DivisionUnit
+        port map (
+            i_clk    => i_clk,
+            i_en     => valid_enum,
+            i_signed => signed_enum,
+            i_num    => i_opA,
+            i_denom  => i_opB,
+            o_div    => div_res,
+            o_rem    => rem_res,
+            o_error  => open, -- Error is not used, division is supposed to check its inputs
+            o_valid  => div_valid
+        );
+    end generate gGenerateDivisionUnit;
 
     ResultMux: process(i_decoded, mul_res, div_res, rem_res)
     begin

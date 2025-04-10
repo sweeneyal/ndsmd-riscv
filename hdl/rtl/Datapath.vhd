@@ -38,7 +38,9 @@ library ndsmd_riscv;
 entity Datapath is
     generic (
         cMemoryUnit_AddressWidth_b  : natural := 32;
-        cMemoryUnit_CachelineSize_B : natural := 16
+        cMemoryUnit_CachelineSize_B : natural := 16;
+
+        cMExtension_GenerateDivisionUnit : boolean := true
     );
     port (
         i_clk : in std_logic;
@@ -216,7 +218,9 @@ begin
     slt_res <= alu_out(0);
 
     eMext : entity ndsmd_riscv.MExtension
-    port map (
+    generic map(
+        cEnableDivisionUnit => cMExtension_GenerateDivisionUnit
+    ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,
 
@@ -374,7 +378,10 @@ begin
     end process ExecuteStage;
 
     eMemoryUnit : entity ndsmd_riscv.MemoryUnit
-    port map (
+    generic map (
+        cAddressWidth_b => cMemoryUnit_AddressWidth_b,
+        cCachelineSize_B => cMemoryUnit_CachelineSize_B
+    ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,
 

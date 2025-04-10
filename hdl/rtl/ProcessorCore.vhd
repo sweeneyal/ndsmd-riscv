@@ -43,7 +43,10 @@ entity ProcessorCore is
         -- the width of of the address bus
         cMemoryUnit_AddressWidth_b  : natural := 32;
         -- the size of the cache line (aka cache block size)
-        cMemoryUnit_CachelineSize_B : natural := 16
+        cMemoryUnit_CachelineSize_B : natural := 16;
+
+        -- flag for generating the division unit
+        cMExtension_GenerateDivisionUnit : boolean := true
     );
     port (
         -- system clock frequency
@@ -178,7 +181,11 @@ begin
     );
 
     eDatapath : entity ndsmd_riscv.Datapath
-    port map (
+    generic map (
+        cMemoryUnit_AddressWidth_b  => cMemoryUnit_AddressWidth_b,
+        cMemoryUnit_CachelineSize_B => cMemoryUnit_CachelineSize_B,
+        cMExtension_GenerateDivisionUnit => cMExtension_GenerateDivisionUnit
+    ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,
 
