@@ -93,7 +93,18 @@ begin
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
-                
+                o_data_wstrb   <= (others => '0');
+                o_data_wvalid  <= '0';
+                o_data_arvalid <= '0';
+                o_data_awvalid <= '0';
+                o_data_bready  <= '0';
+                o_data_rready  <= '0';
+                o_data_wdata   <= (others => '0');
+                o_data_arprot  <= (others => '0');
+                o_data_awprot  <= (others => '0');
+
+                -- TODO: Add cache reads/writes
+                o_valid <= '0';
             else
                 case state is
                     when IDLE =>

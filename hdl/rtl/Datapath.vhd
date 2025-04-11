@@ -235,7 +235,7 @@ begin
 
     o_pcwen <= pcwen and i_issued.valid;
 
-    JumpBranchHandling: process(i_issued, alu_out)
+    JumpBranchHandling: process(i_issued, alu_out, slt_res, eq_res)
     begin
         alu_res <= alu_out;
         case i_issued.instr.jump_branch is
