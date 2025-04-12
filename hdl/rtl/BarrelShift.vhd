@@ -27,21 +27,32 @@ begin
     -- I'm not prepared at this time to make this use the new instruction
     -- record and its enums.
 
-    bs_sign     <= i_opA(31) and i_arith;
-    bs_level(0) <= cond_select(i_right = '1', i_opA, reverse(i_opA));
+    -- bs_sign     <= i_opA(31) and i_arith;
+    -- bs_level(0) <= cond_select(i_right = '1', i_opA, reverse(i_opA));
 
-    gBarrelShifter: for g_ii in 0 to cNumStages - 1 generate
-        bs_level(g_ii + 1)((cXlen - 1) downto cXlen - (2 ** g_ii)) <= 
-            cond_select(i_shamt(g_ii) = '1', 
-                ((cXlen - 1) downto cXlen-(2** g_ii) => bs_sign), 
-                bs_level(g_ii)((cXlen - 1) downto cXlen-(2** g_ii)));
+    -- gBarrelShifter: for g_ii in 0 to cNumStages - 1 generate
+    --     bs_level(g_ii + 1)((cXlen - 1) downto cXlen - (2 ** g_ii)) <= 
+    --         cond_select(i_shamt(g_ii) = '1', 
+    --             ((cXlen - 1) downto cXlen-(2** g_ii) => bs_sign), 
+    --             bs_level(g_ii)((cXlen - 1) downto cXlen-(2** g_ii)));
 
-        bs_level(g_ii + 1)((cXlen - (2 ** g_ii)) - 1 downto 0) <= 
-            cond_select(i_shamt(g_ii) = '1', 
-                bs_level(g_ii)((cXlen - 1) downto 2 ** g_ii), 
-                bs_level(g_ii)((cXlen - (2** g_ii))-1 downto 0));
-    end generate gBarrelShifter;
+    --     bs_level(g_ii + 1)((cXlen - (2 ** g_ii)) - 1 downto 0) <= 
+    --         cond_select(i_shamt(g_ii) = '1', 
+    --             bs_level(g_ii)((cXlen - 1) downto 2 ** g_ii), 
+    --             bs_level(g_ii)((cXlen - (2** g_ii))-1 downto 0));
+    -- end generate gBarrelShifter;
 
-    o_res <= cond_select(i_right = '1', bs_level(cNumStages), reverse(bs_level(cNumStages)));
+    ShiftImplementation: process(i_right, i_arith, i_opA, i_shamt)
+    begin
+        if (i_right = '1') then
+            if (i_arith = '1') then
+                o_res <= std_logic_vector(shift_right(signed(i_opA), to_natural(i_shamt)));
+            else
+                o_res <= std_logic_vector(shift_right(unsigned(i_opA), to_natural(i_shamt)));
+            end if;
+        else
+            o_res <= std_logic_vector(shift_left(unsigned(i_opA), to_natural(i_shamt)));
+        end if;
+    end process ShiftImplementation;
     
 end architecture rtl;

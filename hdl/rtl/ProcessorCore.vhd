@@ -54,6 +54,12 @@ entity ProcessorCore is
         -- active low reset synchronous to the system clock
         i_resetn : in std_logic;
 
+        -- debug signals
+        o_dbg_pc    : out std_logic_vector(31 downto 0);
+        o_dbg_rd    : out std_logic_vector(4 downto 0);
+        o_dbg_rdwen : out std_logic;
+        o_dbg_res   : out std_logic_vector(31 downto 0);
+
         -------------------------------------------------------
         -- AXI4 LITE Instruction Ports
         -------------------------------------------------------
@@ -194,6 +200,11 @@ begin
 
         o_pc    => new_pc,
         o_pcwen => pcwen,
+
+        o_dbg_pc    => o_dbg_pc,
+        o_dbg_rd    => o_dbg_rd,
+        o_dbg_rdwen => o_dbg_rdwen,
+        o_dbg_res   => o_dbg_res,
 
         o_data_awaddr  => o_data_awaddr,
         o_data_awprot  => o_data_awprot,

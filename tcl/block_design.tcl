@@ -40,7 +40,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 
 # The design that will be created by this Tcl script contains the following 
 # module references:
-# Debouncer, SimpleRom, NdsmdRv32
+# Debouncer, SimpleRom, ByteAddrBram, ByteAddrBram, NdsmdRv32
 
 # Please add the sources of those modules before sourcing this Tcl script.
 
@@ -133,7 +133,6 @@ if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
 xilinx.com:ip:clk_wiz:6.0\
 xilinx.com:ip:axi_bram_ctrl:4.1\
-xilinx.com:ip:blk_mem_gen:8.4\
 xilinx.com:ip:axi_uartlite:2.0\
 xilinx.com:ip:ila:6.2\
 "
@@ -163,6 +162,8 @@ if { $bCheckModules == 1 } {
    set list_check_mods "\ 
 Debouncer\
 SimpleRom\
+ByteAddrBram\
+ByteAddrBram\
 NdsmdRv32\
 "
 
@@ -236,12 +237,12 @@ proc create_root_design { parentCell } {
   # Create instance: clk_wiz, and set properties
   set clk_wiz [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz ]
   set_property -dict [list \
-    CONFIG.CLKOUT1_JITTER {137.143} \
-    CONFIG.CLKOUT1_PHASE_ERROR {98.575} \
-    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {80.000} \
-    CONFIG.MMCM_CLKFBOUT_MULT_F {10.000} \
-    CONFIG.MMCM_CLKOUT0_DIVIDE_F {12.500} \
-    CONFIG.MMCM_DIVCLK_DIVIDE {1} \
+    CONFIG.CLKOUT1_JITTER {226.435} \
+    CONFIG.CLKOUT1_PHASE_ERROR {236.795} \
+    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {75.000} \
+    CONFIG.MMCM_CLKFBOUT_MULT_F {40.125} \
+    CONFIG.MMCM_CLKOUT0_DIVIDE_F {13.375} \
+    CONFIG.MMCM_DIVCLK_DIVIDE {4} \
     CONFIG.USE_LOCKED {false} \
     CONFIG.USE_RESET {false} \
   ] $clk_wiz
@@ -255,13 +256,10 @@ proc create_root_design { parentCell } {
   # Create instance: axi_bram_ctrl_0, and set properties
   set axi_bram_ctrl_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_ctrl:4.1 axi_bram_ctrl_0 ]
   set_property -dict [list \
-    CONFIG.DATA_WIDTH {128} \
+    CONFIG.DATA_WIDTH {32} \
     CONFIG.SINGLE_PORT_BRAM {1} \
   ] $axi_bram_ctrl_0
 
-
-  # Create instance: blk_mem_gen_0, and set properties
-  set blk_mem_gen_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:blk_mem_gen:8.4 blk_mem_gen_0 ]
 
   # Create instance: axi_uartlite_0, and set properties
   set axi_uartlite_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_uartlite:2.0 axi_uartlite_0 ]
@@ -281,9 +279,20 @@ proc create_root_design { parentCell } {
 
   # Create instance: ila_0, and set properties
   set ila_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_0 ]
+  set_property -dict [list \
+    CONFIG.C_ADV_TRIGGER {false} \
+    CONFIG.C_DATA_DEPTH {8192} \
+    CONFIG.C_EN_STRG_QUAL {1} \
+  ] $ila_0
+
 
   # Create instance: ila_1, and set properties
   set ila_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_1 ]
+  set_property -dict [list \
+    CONFIG.C_DATA_DEPTH {8192} \
+    CONFIG.C_EN_STRG_QUAL {1} \
+  ] $ila_1
+
 
   # Create instance: Debouncer_0, and set properties
   set block_name Debouncer
@@ -299,13 +308,10 @@ proc create_root_design { parentCell } {
   # Create instance: axi_bram_ctrl_2, and set properties
   set axi_bram_ctrl_2 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_ctrl:4.1 axi_bram_ctrl_2 ]
   set_property -dict [list \
-    CONFIG.DATA_WIDTH {128} \
+    CONFIG.DATA_WIDTH {32} \
     CONFIG.SINGLE_PORT_BRAM {1} \
   ] $axi_bram_ctrl_2
 
-
-  # Create instance: blk_mem_gen_1, and set properties
-  set blk_mem_gen_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:blk_mem_gen:8.4 blk_mem_gen_1 ]
 
   # Create instance: SimpleRom_0, and set properties
   set block_name SimpleRom
@@ -318,6 +324,46 @@ proc create_root_design { parentCell } {
      return 1
    }
     set_property CONFIG.cRomFileName {/home/asweeney/Projects/FPGA/ndsmd-riscv/sw/coe/matmult.data} $SimpleRom_0
+
+
+  # Create instance: ByteAddrBram_0, and set properties
+  set block_name ByteAddrBram
+  set block_cell_name ByteAddrBram_0
+  if { [catch {set ByteAddrBram_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $ByteAddrBram_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+    set_property CONFIG.cAddressWidth_b {14} $ByteAddrBram_0
+
+
+  # Create instance: ByteAddrBram_1, and set properties
+  set block_name ByteAddrBram
+  set block_cell_name ByteAddrBram_1
+  if { [catch {set ByteAddrBram_1 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $ByteAddrBram_1 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+    set_property CONFIG.cAddressWidth_b {14} $ByteAddrBram_1
+
+
+  # Create instance: ila_2, and set properties
+  set ila_2 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_2 ]
+  set_property -dict [list \
+    CONFIG.C_ADV_TRIGGER {true} \
+    CONFIG.C_DATA_DEPTH {2048} \
+    CONFIG.C_EN_STRG_QUAL {1} \
+    CONFIG.C_MONITOR_TYPE {Native} \
+    CONFIG.C_NUM_OF_PROBES {4} \
+    CONFIG.C_PROBE0_WIDTH {32} \
+    CONFIG.C_PROBE1_WIDTH {5} \
+    CONFIG.C_PROBE3_WIDTH {32} \
+  ] $ila_2
 
 
   # Create instance: NdsmdRv32_0, and set properties
@@ -337,11 +383,11 @@ proc create_root_design { parentCell } {
 
 
   set_property -dict [ list \
-   CONFIG.FREQ_HZ {80000000} \
+   CONFIG.FREQ_HZ {75000000} \
  ] [get_bd_intf_pins /NdsmdRv32_0/m_axi_data]
 
   set_property -dict [ list \
-   CONFIG.FREQ_HZ {80000000} \
+   CONFIG.FREQ_HZ {75000000} \
  ] [get_bd_intf_pins /NdsmdRv32_0/m_axi_instr]
 
   # Create interface connections
@@ -349,27 +395,41 @@ proc create_root_design { parentCell } {
 connect_bd_intf_net -intf_net [get_bd_intf_nets NdsmdRv32_0_m_axi_data] [get_bd_intf_pins NdsmdRv32_0/m_axi_data] [get_bd_intf_pins ila_1/SLOT_0_AXI]
   connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins axi_interconnect_1/S00_AXI] [get_bd_intf_pins NdsmdRv32_0/m_axi_instr]
 connect_bd_intf_net -intf_net [get_bd_intf_nets S00_AXI_1] [get_bd_intf_pins axi_interconnect_1/S00_AXI] [get_bd_intf_pins ila_0/SLOT_0_AXI]
-  connect_bd_intf_net -intf_net axi_bram_ctrl_0_BRAM_PORTA [get_bd_intf_pins axi_bram_ctrl_0/BRAM_PORTA] [get_bd_intf_pins blk_mem_gen_0/BRAM_PORTA]
-  connect_bd_intf_net -intf_net axi_bram_ctrl_2_BRAM_PORTA [get_bd_intf_pins axi_bram_ctrl_2/BRAM_PORTA] [get_bd_intf_pins blk_mem_gen_1/BRAM_PORTA]
   connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_pins axi_interconnect_0/M00_AXI] [get_bd_intf_pins axi_bram_ctrl_0/S_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_0_M01_AXI [get_bd_intf_pins axi_uartlite_0/S_AXI] [get_bd_intf_pins axi_interconnect_0/M01_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_0_M02_AXI [get_bd_intf_pins axi_interconnect_0/M02_AXI] [get_bd_intf_pins axi_bram_ctrl_2/S_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_1_M00_AXI [get_bd_intf_pins axi_bram_ctrl_1/S_AXI] [get_bd_intf_pins axi_interconnect_1/M00_AXI]
 
   # Create port connections
+  connect_bd_net -net ByteAddrBram_0_o_rdataa [get_bd_pins ByteAddrBram_0/o_rdataa] [get_bd_pins axi_bram_ctrl_0/bram_rddata_a]
+  connect_bd_net -net ByteAddrBram_1_o_rdataa [get_bd_pins ByteAddrBram_1/o_rdataa] [get_bd_pins axi_bram_ctrl_2/bram_rddata_a]
   connect_bd_net -net Debouncer_0_o_sig [get_bd_pins Debouncer_0/o_sig] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_0/M01_ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_uartlite_0/s_axi_aresetn] [get_bd_pins axi_bram_ctrl_1/s_axi_aresetn] [get_bd_pins axi_bram_ctrl_2/s_axi_aresetn] [get_bd_pins axi_interconnect_0/M02_ARESETN] [get_bd_pins NdsmdRv32_0/i_resetn]
+  connect_bd_net -net NdsmdRv32_0_o_dbg_pc [get_bd_pins NdsmdRv32_0/o_dbg_pc] [get_bd_pins ila_2/probe0]
+  connect_bd_net -net NdsmdRv32_0_o_dbg_rd [get_bd_pins NdsmdRv32_0/o_dbg_rd] [get_bd_pins ila_2/probe1]
+  connect_bd_net -net NdsmdRv32_0_o_dbg_rdwen [get_bd_pins NdsmdRv32_0/o_dbg_rdwen] [get_bd_pins ila_2/probe2]
+  connect_bd_net -net NdsmdRv32_0_o_dbg_res [get_bd_pins NdsmdRv32_0/o_dbg_res] [get_bd_pins ila_2/probe3]
   connect_bd_net -net SimpleRom_0_o_data [get_bd_pins SimpleRom_0/o_data] [get_bd_pins axi_bram_ctrl_1/bram_rddata_a]
+  connect_bd_net -net axi_bram_ctrl_0_bram_addr_a [get_bd_pins axi_bram_ctrl_0/bram_addr_a] [get_bd_pins ByteAddrBram_0/i_addra]
+  connect_bd_net -net axi_bram_ctrl_0_bram_clk_a [get_bd_pins axi_bram_ctrl_0/bram_clk_a] [get_bd_pins ByteAddrBram_0/i_clk]
+  connect_bd_net -net axi_bram_ctrl_0_bram_en_a [get_bd_pins axi_bram_ctrl_0/bram_en_a] [get_bd_pins ByteAddrBram_0/i_ena]
+  connect_bd_net -net axi_bram_ctrl_0_bram_we_a [get_bd_pins axi_bram_ctrl_0/bram_we_a] [get_bd_pins ByteAddrBram_0/i_wena]
+  connect_bd_net -net axi_bram_ctrl_0_bram_wrdata_a [get_bd_pins axi_bram_ctrl_0/bram_wrdata_a] [get_bd_pins ByteAddrBram_0/i_wdataa]
   connect_bd_net -net axi_bram_ctrl_1_bram_addr_a [get_bd_pins axi_bram_ctrl_1/bram_addr_a] [get_bd_pins SimpleRom_0/i_addr]
   connect_bd_net -net axi_bram_ctrl_1_bram_clk_a [get_bd_pins axi_bram_ctrl_1/bram_clk_a] [get_bd_pins SimpleRom_0/i_clk]
   connect_bd_net -net axi_bram_ctrl_1_bram_en_a [get_bd_pins axi_bram_ctrl_1/bram_en_a] [get_bd_pins SimpleRom_0/i_en]
+  connect_bd_net -net axi_bram_ctrl_2_bram_addr_a [get_bd_pins axi_bram_ctrl_2/bram_addr_a] [get_bd_pins ByteAddrBram_1/i_addra]
+  connect_bd_net -net axi_bram_ctrl_2_bram_clk_a [get_bd_pins axi_bram_ctrl_2/bram_clk_a] [get_bd_pins ByteAddrBram_1/i_clk]
+  connect_bd_net -net axi_bram_ctrl_2_bram_en_a [get_bd_pins axi_bram_ctrl_2/bram_en_a] [get_bd_pins ByteAddrBram_1/i_ena]
+  connect_bd_net -net axi_bram_ctrl_2_bram_we_a [get_bd_pins axi_bram_ctrl_2/bram_we_a] [get_bd_pins ByteAddrBram_1/i_wena]
+  connect_bd_net -net axi_bram_ctrl_2_bram_wrdata_a [get_bd_pins axi_bram_ctrl_2/bram_wrdata_a] [get_bd_pins ByteAddrBram_1/i_wdataa]
   connect_bd_net -net axi_uartlite_0_tx [get_bd_pins axi_uartlite_0/tx] [get_bd_ports tx]
-  connect_bd_net -net clk_wiz_clk_out1 [get_bd_pins clk_wiz/clk_out1] [get_bd_pins Debouncer_0/i_clk] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_1/s_axi_aclk] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_0/M01_ACLK] [get_bd_pins axi_uartlite_0/s_axi_aclk] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins ila_0/clk] [get_bd_pins ila_1/clk] [get_bd_pins axi_bram_ctrl_2/s_axi_aclk] [get_bd_pins axi_interconnect_0/M02_ACLK] [get_bd_pins NdsmdRv32_0/i_clk]
+  connect_bd_net -net clk_wiz_clk_out1 [get_bd_pins clk_wiz/clk_out1] [get_bd_pins Debouncer_0/i_clk] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_1/s_axi_aclk] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_0/M01_ACLK] [get_bd_pins axi_uartlite_0/s_axi_aclk] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins ila_0/clk] [get_bd_pins ila_1/clk] [get_bd_pins axi_bram_ctrl_2/s_axi_aclk] [get_bd_pins axi_interconnect_0/M02_ACLK] [get_bd_pins ila_2/clk] [get_bd_pins NdsmdRv32_0/i_clk]
   connect_bd_net -net resetn_1 [get_bd_ports resetn] [get_bd_pins Debouncer_0/i_sig]
   connect_bd_net -net rx_1 [get_bd_ports rx] [get_bd_pins axi_uartlite_0/rx]
   connect_bd_net -net sysclk_1 [get_bd_ports sysclk] [get_bd_pins clk_wiz/clk_in1]
 
   # Create address segments
-  assign_bd_address -offset 0x00000000 -range 0x00004000 -target_address_space [get_bd_addr_spaces NdsmdRv32_0/m_axi_data] [get_bd_addr_segs axi_bram_ctrl_0/S_AXI/Mem0] -force
+  assign_bd_address -offset 0x00004000 -range 0x00004000 -target_address_space [get_bd_addr_spaces NdsmdRv32_0/m_axi_data] [get_bd_addr_segs axi_bram_ctrl_0/S_AXI/Mem0] -force
   assign_bd_address -offset 0xFFFFC000 -range 0x00004000 -target_address_space [get_bd_addr_spaces NdsmdRv32_0/m_axi_data] [get_bd_addr_segs axi_bram_ctrl_2/S_AXI/Mem0] -force
   assign_bd_address -offset 0x00010000 -range 0x00010000 -target_address_space [get_bd_addr_spaces NdsmdRv32_0/m_axi_data] [get_bd_addr_segs axi_uartlite_0/S_AXI/Reg] -force
   assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces NdsmdRv32_0/m_axi_instr] [get_bd_addr_segs axi_bram_ctrl_1/S_AXI/Mem0] -force

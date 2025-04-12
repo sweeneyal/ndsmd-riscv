@@ -48,6 +48,12 @@ entity NdsmdRv32 is
         -- active low reset synchronous to the system clock
         i_resetn : in std_logic;
 
+        -- debug signals
+        o_dbg_pc    : out std_logic_vector(31 downto 0);
+        o_dbg_rd    : out std_logic_vector(4 downto 0);
+        o_dbg_rdwen : out std_logic;
+        o_dbg_res   : out std_logic_vector(31 downto 0);
+
         -------------------------------------------------------
         -- AXI4 LITE Instruction Ports
         -------------------------------------------------------
@@ -156,6 +162,11 @@ begin
     ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,
+
+        o_dbg_pc    => o_dbg_pc,
+        o_dbg_rd    => o_dbg_rd,
+        o_dbg_rdwen => o_dbg_rdwen,
+        o_dbg_res   => o_dbg_res,
 
         o_instr_araddr  => m_axi_instr_araddr,
         o_instr_arprot  => m_axi_instr_arprot,

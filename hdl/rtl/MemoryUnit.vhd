@@ -105,6 +105,12 @@ begin
 
                 -- TODO: Add cache reads/writes
                 o_valid <= '0';
+
+                state            <= IDLE;
+                lsb              := 0;
+                misaligned       := '0';
+                prev_misaligned  := '0';
+                axi_transactions := "000";
             else
                 case state is
                     when IDLE =>

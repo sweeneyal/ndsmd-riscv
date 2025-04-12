@@ -52,6 +52,11 @@ entity Datapath is
         o_pc    : out unsigned(31 downto 0);
         o_pcwen : out std_logic;
 
+        o_dbg_pc    : out std_logic_vector(31 downto 0);
+        o_dbg_rd    : out std_logic_vector(4 downto 0);
+        o_dbg_rdwen : out std_logic;
+        o_dbg_res   : out std_logic_vector(31 downto 0);
+
         -- AXI-like interface to allow for easier implementation
         -- address bus for requesting an address
         o_data_awaddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
@@ -149,7 +154,15 @@ architecture rtl of Datapath is
     constant cWritebackIndex : natural := 3;
 
     signal global_stall_bus : std_logic_vector(cWritebackIndex downto cDecodeIndex) := (others => '0');
+
+    attribute KEEP_HIERARCHY : string;
+    attribute KEEP_HIERARCHY of eAlu : label is "true";
 begin
+
+    o_dbg_pc    <= std_logic_vector(writeback.status.pc);
+    o_dbg_rd    <= writeback.status.instr.base.rd;
+    o_dbg_rdwen <= writeback.rdwen;
+    o_dbg_res   <= writeback.res;
 
     o_status <= datapath_status_t'(
         decode    => i_issued,
@@ -521,7 +534,7 @@ begin
         end if;
     end process MemAccessStage;
 
-    global_stall_bus(cWritebackIndex) <= bool2bit(writeback.status.stall_reason /= NOT_STALLED);
+    global_stall_bus(cWritebackIndex) <= '0';
 
     WritebackStage: process(i_clk)
     begin
@@ -556,7 +569,7 @@ begin
 
                 -- If the execute stage and all stages after it are not stalled, and the 
                 -- decode stage is also not stalled, we can accept a new instruction.
-                if (global_stall_bus(cWritebackIndex downto cMemAccessIndex) = "00") then
+                if (global_stall_bus(cMemAccessIndex) = '0') then
                     writeback.status  <= memaccess.status;
                     if (memaccess.status.instr.mem_operation /= LOAD) then
                         writeback.res <= memaccess.exec_res;
@@ -565,21 +578,9 @@ begin
                     end if;
                     writeback.rdwen <= bool2bit(memaccess.status.valid = '1' and memaccess.status.instr.destination = REGISTERS);
 
-                elsif (global_stall_bus(cWritebackIndex) = '1') then
-                    -- If we're stalled, we're either stalled because later stages are stalled or
-                    -- because we're executing a multi-cycle instruction. The execute stage's status
-                    -- of stalled/not stalled does not matter, as it cannot be accepted anyway without
-                    -- dropping the current instruction.
-
-                    -- If we're the one thats stalled, check if the stall has been resolved.
-                    if (writeback.status.stall_reason = MEMORY_STALL) then
-                        writeback.status.stall_reason <= NOT_STALLED;
-                    end if;
-
-                elsif (global_stall_bus(cWritebackIndex downto cMemAccessIndex) = "01") then
+                else
                     -- Alternatively, the decode stage could be stalled, i.e. it did not issue a new
                     -- instruction. Therefore just populate the exec status with an invalid instruction.
-
                     writeback.status <= stage_status_t'(
                         id           => -1,
                         pc           => (others => '0'),
@@ -602,6 +603,9 @@ begin
                         rs1_hzd      => -1,
                         rs2_hzd      => -1
                     );
+
+                    writeback.res   <= (others => '0');
+                    writeback.rdwen <= '0';
                 end if;
             end if;
         end if;

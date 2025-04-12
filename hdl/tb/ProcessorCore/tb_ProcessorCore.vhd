@@ -29,7 +29,7 @@ architecture tb of tb_ProcessorCore is
     -- the width of of the address bus
     constant cMemoryUnit_AddressWidth_b  : natural := 32;
     -- the size of the cache line (aka cache block size)
-    constant cMemoryUnit_CachelineSize_B : natural := 16;
+    constant cMemoryUnit_CachelineSize_B : natural := 4;
 
     signal stimuli   : stimuli_t;
     signal responses : responses_t;
@@ -71,7 +71,7 @@ begin
     generic map (
         cPrefetch_PcMisalignmentSeverity => warning,
         cMemoryUnit_AddressWidth_b       => 32,
-        cMemoryUnit_CachelineSize_B      => 16
+        cMemoryUnit_CachelineSize_B      => 4
     ) port map (
         i_clk    => stimuli.clk,
         i_resetn => stimuli.resetn,

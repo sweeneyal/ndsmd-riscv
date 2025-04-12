@@ -431,7 +431,28 @@ begin
             if (i_resetn = '0') then
                 stalled.valid  <= '0';
                 cpu_ready      <= '0';
-                o_issued.valid <= '0';
+                o_issued <= stage_status_t'(
+                    id           => -1,
+                    pc           => (others => '0'),
+                    instr        => decoded_instr_t'(
+                        base           => decode(x"00000000"),
+                        unit           => ALU,
+                        operation      => NULL_OP,
+                        source1        => REGISTERS,
+                        source2        => REGISTERS,
+                        immediate      => (others => '0'),
+                        mem_operation  => NULL_OP,
+                        mem_access     => BYTE_ACCESS,
+                        jump_branch    => NOT_JUMP,
+                        condition      => NO_COND,
+                        new_pc         => (others => '0'),
+                        destination    => REGISTERS
+                    ),
+                    valid        => '0',
+                    stall_reason => NOT_STALLED,
+                    rs1_hzd      => -1, -- These values will be overwritten by the below function calls.
+                    rs2_hzd      => -1
+                );
             else
                 if (i_pcwen = '1') then
                     stalled.valid  <= '0';
@@ -566,6 +587,31 @@ begin
                         -- We have neither a stalled instruction, nor need to stall
                         -- request a new instruction from the prefetcher
                         cpu_ready <= '1';
+
+                        -- We also need to not issue several of the same instruction,
+                        -- so drop the o_issued.valid signal here.
+                        o_issued <= stage_status_t'(
+                            id           => -1,
+                            pc           => (others => '0'),
+                            instr        => decoded_instr_t'(
+                                base           => decode(x"00000000"),
+                                unit           => ALU,
+                                operation      => NULL_OP,
+                                source1        => REGISTERS,
+                                source2        => REGISTERS,
+                                immediate      => (others => '0'),
+                                mem_operation  => NULL_OP,
+                                mem_access     => BYTE_ACCESS,
+                                jump_branch    => NOT_JUMP,
+                                condition      => NO_COND,
+                                new_pc         => (others => '0'),
+                                destination    => REGISTERS
+                            ),
+                            valid        => '0',
+                            stall_reason => NOT_STALLED,
+                            rs1_hzd      => -1, -- These values will be overwritten by the below function calls.
+                            rs2_hzd      => -1
+                        );
                     end if;
                 end if;
             end if;
