@@ -97,6 +97,8 @@ begin
                             jump_branch => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -119,6 +121,8 @@ begin
                             jump_branch => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -141,6 +145,8 @@ begin
                             jump_branch => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -163,6 +169,8 @@ begin
                             jump_branch => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -215,6 +223,8 @@ begin
                                 jump_branch => NOT_JUMP,
                                 condition      => NO_COND,
                                 new_pc         => (others => '0'),
+                                csr_operation  => NULL_OP,
+                                csr_access     => CSRRW,
                                 destination    => REGISTERS
                             ),
                             valid        => '0',
@@ -254,6 +264,8 @@ begin
                             jump_branch => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -276,6 +288,8 @@ begin
                             jump_branch => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -298,6 +312,8 @@ begin
                             jump_branch => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,    
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -320,6 +336,8 @@ begin
                             jump_branch => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -369,6 +387,8 @@ begin
                                 jump_branch => NOT_JUMP,
                                 condition      => NO_COND,
                                 new_pc         => (others => '0'),
+                                csr_operation  => NULL_OP,
+                                csr_access     => CSRRW,
                                 destination    => REGISTERS
                             ),
                             valid        => '0',
@@ -396,6 +416,8 @@ begin
                                 jump_branch => NOT_JUMP,
                                 condition      => NO_COND,
                                 new_pc         => (others => '0'),
+                                csr_operation  => NULL_OP,
+                                csr_access     => CSRRW,
                                 destination    => REGISTERS
                             ),
                             valid        => '0',
@@ -432,6 +454,8 @@ begin
                                     jump_branch => NOT_JUMP,
                                     condition      => NO_COND,
                                     new_pc         => (others => '0'),
+                                    csr_operation  => NULL_OP,
+                                    csr_access     => CSRRW,
                                     destination    => REGISTERS
                                 ),
                                 valid        => '0',

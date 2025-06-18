@@ -1,0 +1,42 @@
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+
+use std.textio.all;
+
+library universal;
+    use universal.CommonFunctions.all;
+    use universal.CommonTypes.all;
+
+entity SimpleCache is
+    generic (
+        cAddrWidth_b     : natural := 32;
+        cCachelineSize_B : natural := 16
+    );
+    port (
+        i_clk    : in std_logic;
+        i_resetn : in std_logic;
+
+        i_cache_addr   : in std_logic_vector(cAddrWidth_b - 1 downto 0);
+        i_cache_en     : in std_logic;
+        i_cache_wen    : in std_logic_vector(cCachelineSize_B - 1 downto 0);
+        i_cache_wdata  : in std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+        o_cache_rdata  : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+        o_cache_rvalid : out std_logic;
+
+        i_memory_addr   : in std_logic_vector(cAddrWidth_b - 1 downto 0);
+        i_memory_en     : in std_logic;
+        i_memory_wen    : in std_logic_vector(cCachelineSize_B - 1 downto 0);
+        i_memory_wdata  : in std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+        o_memory_rdata  : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+        o_memory_rvalid : out std_logic
+    );
+end entity SimpleCache;
+
+architecture rtl of SimpleCache is
+    
+begin
+    
+    
+    
+end architecture rtl;

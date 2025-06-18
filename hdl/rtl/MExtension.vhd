@@ -95,6 +95,7 @@ begin
         eDivider : entity ndsmd_riscv.DivisionUnit
         port map (
             i_clk    => i_clk,
+            i_resetn => i_resetn,
             i_en     => valid_enum,
             i_signed => signed_enum,
             i_num    => i_opA,

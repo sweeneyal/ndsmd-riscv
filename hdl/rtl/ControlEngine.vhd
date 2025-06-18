@@ -346,6 +346,46 @@ architecture rtl of ControlEngine is
                 -- regs[rs1], so we use the ADD operation.
                 decoded.operation := ADD;
 
+            when cEcallOpcode =>
+                if (instr.rd = "00000" and instr.rs1 = "00000" and instr.funct3 = "000") then
+                    if (instr.itype = "000000000000") then
+                        -- ECALL
+                    elsif (instr.itype = "000000000001") then
+                        -- EBREAK
+                    elsif (instr.funct7 = "0011000" and instr.rs2 = "00010") then
+                        -- MRET
+                    elsif (instr.funct7 = "0001000" and instr.rs2 = "00101") then
+                        -- WFI
+                    else
+                        -- Malformed instruction
+                    end if;
+                else
+                    case (instr.funct3) is
+                        when "001" =>
+                            -- CSRRW
+
+                        when "010" =>
+                            -- CSRRS
+
+                        when "011" =>
+                            -- CSRRC
+
+                        when "101" =>
+                            -- CSRRWI
+                            -- Note: for CSRROPs, if they are immediate type, use source1 <= IMMEDIATE;
+
+                        when "110" =>
+                            -- CSRRSI
+
+                        when "111" =>
+                            -- CSRRCI
+                    
+                        when others =>
+                            -- Malformed instruction
+                    
+                    end case;
+                end if;
+
             when others =>
                 assert false report "ControlEngine::contextual_decode: Malformed Instruction" severity failure;
                 
@@ -372,6 +412,8 @@ architecture rtl of ControlEngine is
             jump_branch    => NOT_JUMP,
             condition      => NO_COND,
             new_pc         => (others => '0'),
+            csr_operation  => NULL_OP,
+            csr_access     => CSRRW,
             destination    => REGISTERS
         );
         decoded.base := instr;
@@ -446,6 +488,8 @@ begin
                         jump_branch    => NOT_JUMP,
                         condition      => NO_COND,
                         new_pc         => (others => '0'),
+                        csr_operation  => NULL_OP,
+                        csr_access     => CSRRW,
                         destination    => REGISTERS
                     ),
                     valid        => '0',
@@ -605,6 +649,8 @@ begin
                                 jump_branch    => NOT_JUMP,
                                 condition      => NO_COND,
                                 new_pc         => (others => '0'),
+                                csr_operation  => NULL_OP,
+                                csr_access     => CSRRW,
                                 destination    => REGISTERS
                             ),
                             valid        => '0',

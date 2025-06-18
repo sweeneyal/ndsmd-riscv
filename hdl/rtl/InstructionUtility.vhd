@@ -108,6 +108,10 @@ package InstructionUtility is
     type jump_type_t is (NOT_JUMP, JAL, JALR, BRANCH);
     type condition_t is (NO_COND, LESS_THAN, EQUAL, NOT_EQUAL, GREATER_THAN_EQ);
 
+    -- CSR operations
+    type csr_operation_t is (NULL_OP, ECALL, EBREAK, MRET, WFI, CSRROP);
+    type csr_access_t is (CSRRW, CSRRS, CSRRC);
+
     -- The destination of the instruction is either a register, memory, or it is a branch
     -- instruction where there is no destination.
     type destination_t is (REGISTERS, MEMORY, BRANCH);
@@ -131,8 +135,12 @@ package InstructionUtility is
 
         -- jump/branch specific fields
         jump_branch : jump_type_t;
-        condition      : condition_t;
-        new_pc         : unsigned(31 downto 0);
+        condition   : condition_t;
+        new_pc      : unsigned(31 downto 0);
+
+        -- zicsr specific fields
+        csr_operation : csr_operation_t;
+        csr_access    : csr_access_t;
 
         -- result definition field
         destination : destination_t;

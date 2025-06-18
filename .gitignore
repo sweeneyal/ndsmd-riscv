@@ -183,6 +183,8 @@ scratch
 
 docs/latex/notes/*
 !docs/latex/notes/*.tex
+!docs/latex/notes/*.bib
+!docs/latex/notes/*.png
 
 sw/**/*.bin
 sw/**/*.elf

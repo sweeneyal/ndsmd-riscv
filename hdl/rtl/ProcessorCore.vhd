@@ -46,7 +46,10 @@ entity ProcessorCore is
         cMemoryUnit_CachelineSize_B : natural := 16;
 
         -- flag for generating the division unit
-        cMExtension_GenerateDivisionUnit : boolean := true
+        cMExtension_GenerateDivisionUnit : boolean := true;
+
+        -- trap base address
+        cZiCsr_TrapBaseAddress : unsigned(31 downto 0)
     );
     port (
         -- system clock frequency
@@ -188,9 +191,10 @@ begin
 
     eDatapath : entity ndsmd_riscv.Datapath
     generic map (
-        cMemoryUnit_AddressWidth_b  => cMemoryUnit_AddressWidth_b,
-        cMemoryUnit_CachelineSize_B => cMemoryUnit_CachelineSize_B,
-        cMExtension_GenerateDivisionUnit => cMExtension_GenerateDivisionUnit
+        cMemoryUnit_AddressWidth_b       => cMemoryUnit_AddressWidth_b,
+        cMemoryUnit_CachelineSize_B      => cMemoryUnit_CachelineSize_B,
+        cMExtension_GenerateDivisionUnit => cMExtension_GenerateDivisionUnit,
+        cZiCsr_TrapBaseAddress           => cZiCsr_TrapBaseAddress
     ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,

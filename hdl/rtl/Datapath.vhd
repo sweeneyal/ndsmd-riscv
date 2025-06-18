@@ -40,7 +40,9 @@ entity Datapath is
         cMemoryUnit_AddressWidth_b  : natural := 32;
         cMemoryUnit_CachelineSize_B : natural := 16;
 
-        cMExtension_GenerateDivisionUnit : boolean := true
+        cMExtension_GenerateDivisionUnit : boolean := true;
+
+        cZiCsr_TrapBaseAddress : unsigned
     );
     port (
         i_clk : in std_logic;
@@ -122,6 +124,13 @@ architecture rtl of Datapath is
     signal mem_res : std_logic_vector(31 downto 0) := (others => '0');
     signal mem_valid : std_logic := '0';
 
+    signal csr_opA : std_logic_vector(31 downto 0) := (others => '0');
+    signal csr_res : std_logic_vector(31 downto 0) := (others => '0');
+
+    signal irpt_pc    : unsigned(31 downto 0) := (others => '0');
+    signal irpt_valid : std_logic := '0';
+    signal irpt_mepc  : unsigned(31 downto 0) := (others => '0');
+
     constant cDecodeIndex : natural := 0;
 
     type execute_stage_t is record
@@ -148,15 +157,13 @@ architecture rtl of Datapath is
         status  : stage_status_t;
         res     : std_logic_vector(31 downto 0);
         rdwen   : std_logic;
+        bkmkpc  : unsigned(31 downto 0);
     end record writeback_stage_t;
     signal writeback : writeback_stage_t;
 
     constant cWritebackIndex : natural := 3;
 
     signal global_stall_bus : std_logic_vector(cWritebackIndex downto cDecodeIndex) := (others => '0');
-
-    attribute KEEP_HIERARCHY : string;
-    attribute KEEP_HIERARCHY of eAlu : label is "true";
 begin
 
     o_dbg_pc    <= std_logic_vector(writeback.status.pc);
@@ -246,11 +253,13 @@ begin
         o_valid => mext_valid
     );
 
-    o_pcwen <= pcwen and i_issued.valid;
+    o_pcwen <= (pcwen and i_issued.valid) or irpt_valid;
 
-    JumpBranchHandling: process(i_issued, alu_out, slt_res, eq_res)
+    JumpBranchHandling: process(i_issued, alu_out, slt_res, eq_res, irpt_pc, irpt_valid)
     begin
         alu_res <= alu_out;
+        -- TODO: Preemptively handle mrets here, since mepc is already
+        -- available on irpt_mepc, we should be able to simply handle them here.
         case i_issued.instr.jump_branch is
             when BRANCH =>
                 o_pc    <= i_issued.instr.new_pc;
@@ -287,6 +296,11 @@ begin
                 pcwen <= '0';
                 
         end case;
+
+        -- Override whatever is going on o_pc to handle here with the interrupt logic.
+        if (irpt_valid = '1') then
+            o_pc <= irpt_pc;
+        end if;
     end process JumpBranchHandling;
 
     global_stall_bus(cExecuteIndex) <= global_stall_bus(cMemAccessIndex) or bool2bit(exec.status.stall_reason /= NOT_STALLED);
@@ -314,6 +328,8 @@ begin
                         jump_branch    => NOT_JUMP,
                         condition      => NO_COND,
                         new_pc         => (others => '0'),
+                        csr_operation  => NULL_OP,
+                        csr_access     => CSRRW,
                         destination    => REGISTERS
                     ),
                     valid        => '0',
@@ -378,6 +394,8 @@ begin
                             jump_branch    => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -430,10 +448,43 @@ begin
         o_data_rready => o_data_rready
     );
 
-    -- eZiCsr : entity ndsmd_riscv.ZiCsrExtension
-    -- port map (
+    CsrOpASelect: process(exec.status.instr, exec.reg_opA)
+    begin
+        if (exec.status.instr.source1 = IMMEDIATE) then
+            csr_opA <= std_logic_vector(resize(unsigned(exec.status.instr.base.rs1), 32));
+        else
+            csr_opA <= reg_opA;
+        end if;
+    end process CsrOpASelect;
 
-    -- );
+    eZiCsr : entity ndsmd_riscv.ZiCsr
+    generic map (
+        cTrapBaseAddress => cZiCsr_TrapBaseAddress
+    ) port map (
+        i_clk    => i_clk,
+        i_resetn => i_resetn,
+
+        i_decoded => exec.status.instr,
+        i_opA     => csr_opA,
+        o_res     => csr_res,
+        
+        i_instret => writeback.status.valid,
+        
+        -- generic interrupts will be allowed to support other interrupt needs that arent the below
+        i_irpt_gen   => (others => '0'),
+        -- ext will be a high priority external interrupt
+        i_irpt_ext   => '0',
+        -- software interrupts are ecalls or exceptions. This signal here will be used for exceptions,
+        -- since ecalls will be handled internal to this entity.
+        i_irpt_sw    => '0', 
+        -- timer interrupts are self explanatory.
+        i_irpt_timer => '0',
+        
+        i_irpt_bkmkpc => writeback.bkmkpc,
+        o_irpt_pc     => irpt_pc,
+        o_irpt_valid  => irpt_valid,
+        o_irpt_mepc   => irpt_mepc
+    );
 
     global_stall_bus(cMemAccessIndex) <= global_stall_bus(cWritebackIndex) or bool2bit(memaccess.status.stall_reason /= NOT_STALLED);
 
@@ -456,6 +507,8 @@ begin
                         jump_branch    => NOT_JUMP,
                         condition      => NO_COND,
                         new_pc         => (others => '0'),
+                        csr_operation  => NULL_OP,
+                        csr_access     => CSRRW,
                         destination    => REGISTERS
                     ),
                     valid        => '0',
@@ -522,6 +575,8 @@ begin
                             jump_branch    => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',
@@ -555,6 +610,8 @@ begin
                         jump_branch    => NOT_JUMP,
                         condition      => NO_COND,
                         new_pc         => (others => '0'),
+                        csr_operation  => NULL_OP,
+                        csr_access     => CSRRW,
                         destination    => REGISTERS
                     ),
                     valid        => '0',
@@ -562,10 +619,18 @@ begin
                     rs1_hzd      => -1,
                     rs2_hzd      => -1
                 );
+
+                writeback.bkmkpc <= (others => '0');
+                writeback.res    <= (others => '0');
+                writeback.rdwen  <= '0';
             else
                 -- If everything after this stage is not stalled, we're not stalled.
                 -- The global stall bus indicates the status of the current stage to the end, and
                 -- then the following stage.
+
+                if (writeback.status.valid = '1') then
+                    writeback.bkmkpc <= writeback.status.pc;
+                end if;
 
                 -- If the execute stage and all stages after it are not stalled, and the 
                 -- decode stage is also not stalled, we can accept a new instruction.
@@ -596,6 +661,8 @@ begin
                             jump_branch    => NOT_JUMP,
                             condition      => NO_COND,
                             new_pc         => (others => '0'),
+                            csr_operation  => NULL_OP,
+                            csr_access     => CSRRW,
                             destination    => REGISTERS
                         ),
                         valid        => '0',

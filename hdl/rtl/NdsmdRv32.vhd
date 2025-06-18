@@ -40,7 +40,10 @@ entity NdsmdRv32 is
         cMemoryUnit_CachelineSize_B : natural := 16;
 
         -- flag for generating the division unit
-        cMExtension_GenerateDivisionUnit : boolean := false
+        cMExtension_GenerateDivisionUnit : boolean := false;
+
+        -- trap base address
+        cZiCsr_TrapBaseAddress : unsigned(31 downto 0)
     );
     port (
         -- system clock frequency
@@ -155,10 +158,11 @@ begin
     
     eCore : entity ndsmd_riscv.ProcessorCore
     generic map (
-        cPrefetch_NumTransactions   => cPrefetch_NumTransactions,
-        cMemoryUnit_AddressWidth_b  => cMemoryUnit_AddressWidth_b,
-        cMemoryUnit_CachelineSize_B => cMemoryUnit_CachelineSize_B,
-        cMExtension_GenerateDivisionUnit => cMExtension_GenerateDivisionUnit
+        cPrefetch_NumTransactions        => cPrefetch_NumTransactions,
+        cMemoryUnit_AddressWidth_b       => cMemoryUnit_AddressWidth_b,
+        cMemoryUnit_CachelineSize_B      => cMemoryUnit_CachelineSize_B,
+        cMExtension_GenerateDivisionUnit => cMExtension_GenerateDivisionUnit,
+        cZiCsr_TrapBaseAddress           => cZiCsr_TrapBaseAddress
     ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,

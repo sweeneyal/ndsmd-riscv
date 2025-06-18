@@ -31,6 +31,8 @@ architecture tb of tb_ProcessorCore is
     -- the size of the cache line (aka cache block size)
     constant cMemoryUnit_CachelineSize_B : natural := 4;
 
+    constant cZiCsr_TrapBaseAddress : unsigned(31 downto 0) := x"0000FFFF";
+
     signal stimuli   : stimuli_t;
     signal responses : responses_t;
 
@@ -71,7 +73,8 @@ begin
     generic map (
         cPrefetch_PcMisalignmentSeverity => warning,
         cMemoryUnit_AddressWidth_b       => 32,
-        cMemoryUnit_CachelineSize_B      => 4
+        cMemoryUnit_CachelineSize_B      => 4,
+        cZiCsr_TrapBaseAddress           => cZiCsr_TrapBaseAddress
     ) port map (
         i_clk    => stimuli.clk,
         i_resetn => stimuli.resetn,
