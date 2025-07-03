@@ -78,7 +78,7 @@ begin
                 num_product <= (others => '0');
                 den_product <= (others => '0');
             else
-                valid_s0       <= '0';
+                valid_s0       <= valid;
                 num_product_s0 <= gdu_engine.num * gdu_engine.fval;
                 den_product_s0 <= gdu_engine.denom * gdu_engine.fval;
 

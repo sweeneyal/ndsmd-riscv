@@ -93,6 +93,8 @@ begin
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
+                -- Possibly set ready signals to allow pre-reset but still-incoming 
+                -- transactions to pretend like they're accepted?
                 o_data_wstrb   <= (others => '0');
                 o_data_wvalid  <= '0';
                 o_data_arvalid <= '0';

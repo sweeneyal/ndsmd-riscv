@@ -350,39 +350,42 @@ architecture rtl of ControlEngine is
                 if (instr.rd = "00000" and instr.rs1 = "00000" and instr.funct3 = "000") then
                     if (instr.itype = "000000000000") then
                         -- ECALL
+                        -- ECALL is not an instruction that retires, so when it gets to 
+                        -- writeback let it expire. 
                     elsif (instr.itype = "000000000001") then
                         -- EBREAK
+                        -- EBREAK is not an instruction that retires, so when it gets to 
+                        -- writeback let it expire. 
                     elsif (instr.funct7 = "0011000" and instr.rs2 = "00010") then
                         -- MRET
+                        -- Reskin this as a form of jump
+                        -- Add MRET to the list of jump_branch enums, so we can simply just use
+                        -- the functionality of JUMPs for MRET.
+                        -- Will also need to handle MRET in ZICSR but in doing so
+                        -- just change the registers, not actually affect the 
+                        -- processor. Once the MRET passes the appropriate stage,
+                        -- then we can allow the change to apply.
                     elsif (instr.funct7 = "0001000" and instr.rs2 = "00101") then
                         -- WFI
+                        -- This will be interesting to implement.
                     else
                         -- Malformed instruction
                     end if;
                 else
-                    case (instr.funct3) is
-                        when "001" =>
-                            -- CSRRW
-
-                        when "010" =>
-                            -- CSRRS
-
-                        when "011" =>
-                            -- CSRRC
-
-                        when "101" =>
-                            -- CSRRWI
-                            -- Note: for CSRROPs, if they are immediate type, use source1 <= IMMEDIATE;
-
-                        when "110" =>
-                            -- CSRRSI
-
-                        when "111" =>
-                            -- CSRRCI
-                    
+                    decoded.csr_operation := CSRROP;
+                    decoded.source1       := REGISTERS;
+                    if (instr.funct3(2) = '1') then
+                        decoded.source1 := IMMEDIATE;
+                    end if;
+                    case (instr.funct3(1 downto 0)) is
+                        when "01" =>
+                            decoded.csr_access := CSRRW;
+                        when "10" =>
+                            decoded.csr_access := CSRRS;
+                        when "11" =>
+                            decoded.csr_access := CSRRC;
                         when others =>
-                            -- Malformed instruction
-                    
+                            assert false report "ControlEngine::contextual_decode: Malformed Instruction" severity failure;
                     end case;
                 end if;
 

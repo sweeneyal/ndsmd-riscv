@@ -120,6 +120,7 @@ architecture rtl of Datapath is
     signal mext_valid : std_logic := '0';
 
     signal pcwen : std_logic := '0';
+    signal pcout : unsigned(31 downto 0) := (others => '0');
 
     signal mem_res : std_logic_vector(31 downto 0) := (others => '0');
     signal mem_valid : std_logic := '0';
@@ -130,6 +131,7 @@ architecture rtl of Datapath is
     signal irpt_pc    : unsigned(31 downto 0) := (others => '0');
     signal irpt_valid : std_logic := '0';
     signal irpt_mepc  : unsigned(31 downto 0) := (others => '0');
+    signal irpt_reset : std_logic := '0';
 
     constant cDecodeIndex : natural := 0;
 
@@ -148,6 +150,7 @@ architecture rtl of Datapath is
         status   : stage_status_t;
         exec_res : std_logic_vector(31 downto 0);
         mem_res  : std_logic_vector(31 downto 0);
+        csr_res  : std_logic_vector(31 downto 0);
     end record memaccess_stage_t;
     signal memaccess : memaccess_stage_t;
 
@@ -157,11 +160,13 @@ architecture rtl of Datapath is
         status  : stage_status_t;
         res     : std_logic_vector(31 downto 0);
         rdwen   : std_logic;
-        bkmkpc  : unsigned(31 downto 0);
     end record writeback_stage_t;
     signal writeback : writeback_stage_t;
 
     constant cWritebackIndex : natural := 3;
+
+    signal bkmkpc       : unsigned(31 downto 0) := (others => '0');
+    signal predictor_pc : unsigned(31 downto 0) := (others => '0');
 
     signal global_stall_bus : std_logic_vector(cWritebackIndex downto cDecodeIndex) := (others => '0');
 begin
@@ -171,6 +176,9 @@ begin
     o_dbg_rdwen <= writeback.rdwen;
     o_dbg_res   <= writeback.res;
 
+    -- This provides a status on what all is in the pipeline to the ControlEngine,
+    -- allowing the control engine to make educated decisions regarding the 
+    -- issuance of instructions.
     o_status <= datapath_status_t'(
         decode    => i_issued,
         execute   => exec.status,
@@ -178,8 +186,15 @@ begin
         writeback => writeback.status
     );
 
+    -- The global stall bus is set up such that stalls late in the pipeline will propagate down
+    -- to the start of the pipeline, which means if one portion of the pipeline stalls, the whole
+    -- pipeline will stall.
     global_stall_bus(cDecodeIndex) <= global_stall_bus(cExecuteIndex) or not i_issued.valid;
     
+    -- The register file is set up in a naive single-cycle indexing structure, which means that
+    -- the value on o_opA and o_opB are the values expected for the instruction being issued on
+    -- i_issued.
+    -- Furthermore, the registers are only updated at the end of the writeback retirement stage.
     eRegisters : entity ndsmd_riscv.RegisterFile
     port map (
         i_clk    => i_clk,
@@ -196,6 +211,9 @@ begin
         i_valid => writeback.rdwen
     );
 
+    -- Because RISC-V has several operand types, ranging from register, program counter, or immediate,
+    -- a further operand selection stage needs to occur following the register file to ensure the 
+    -- correct operands for the instruction are chosen.
     OperandSelection: process(i_issued, reg_opA, reg_opB)
     begin
         case i_issued.instr.source1 is
@@ -219,12 +237,17 @@ begin
                 opB <= std_logic_vector(i_issued.instr.immediate);
             when others =>
                 assert false 
-                    report "Operand A should never be anything other than registers, program counter, or zero." 
+                    report "Operand B should never be anything other than registers or an immediate." 
                     severity failure;
                 opB <= (others => '0');
         end case;
     end process OperandSelection;
 
+    -- The ALU implementation here performs all integer mathematical and logical operations in parallel,
+    -- with the exception of the multiplication, which occurs in the MExtension unit. Further, they are muxed
+    -- into a final alu_out result.
+    -- Additional, the eq_res (indicating opA and opB are equal) is always provided but only used during branch
+    -- math.
     eAlu : entity ndsmd_riscv.IntegerAlu
     port map (
         i_decoded => i_issued.instr,
@@ -235,14 +258,22 @@ begin
         o_eq  => eq_res
     );
 
+    -- Branch math overloads the use of the set-less-than unit within the ALU, allowing it to be used for
+    -- branch operations.
     slt_res <= alu_out(0);
 
+    irpt_reset <= not bool2bit(irpt_valid = '1' or i_resetn = '0'); 
+
+    -- The MExtension allows the generation and use of the multiplier and division unit.
+    -- This unit is clocked, and thus will cause pipeline stalls if used.
+    -- The multiplier is technically pipelined, but the division unit is very much not pipelined.
+    -- Additional support for pipelining the multiplier would need to be added.
     eMext : entity ndsmd_riscv.MExtension
     generic map(
         cEnableDivisionUnit => cMExtension_GenerateDivisionUnit
     ) port map (
         i_clk    => i_clk,
-        i_resetn => i_resetn,
+        i_resetn => irpt_reset,
 
         i_decoded => i_issued.instr,
         i_valid   => i_issued.valid,
@@ -253,8 +284,14 @@ begin
         o_valid => mext_valid
     );
 
+    -- This provides the InstrPrefetcher with the new PC during jumps, branches, interrupts,
+    -- and MRETs.
     o_pcwen <= (pcwen and i_issued.valid) or irpt_valid;
+    o_pc    <= pcout;
 
+    -- Here we select the correct next PC based on the instruction that triggered the
+    -- jump. If it was an interrupt, we then override whatever is going to the PC, which
+    -- can be an existing jump or some other instruction.
     JumpBranchHandling: process(i_issued, alu_out, slt_res, eq_res, irpt_pc, irpt_valid)
     begin
         alu_res <= alu_out;
@@ -262,7 +299,7 @@ begin
         -- available on irpt_mepc, we should be able to simply handle them here.
         case i_issued.instr.jump_branch is
             when BRANCH =>
-                o_pc    <= i_issued.instr.new_pc;
+                pcout    <= i_issued.instr.new_pc;
                 case i_issued.instr.condition is
                     when LESS_THAN =>
                         pcwen <= bool2bit(slt_res = '1' and eq_res = '0');
@@ -280,7 +317,7 @@ begin
                 end case;
                 
             when JAL =>
-                o_pc    <= i_issued.instr.new_pc;
+                pcout    <= i_issued.instr.new_pc;
                 pcwen <= '1';
 
             when JALR =>
@@ -288,27 +325,32 @@ begin
                 -- control engine, and use the ALU to compute the target address.
                 -- Every other option in this setup has the target address precomputed instead.
                 alu_res <= std_logic_vector(i_issued.instr.new_pc);
-                o_pc    <= unsigned(alu_out);
+                pcout    <= unsigned(alu_out);
                 pcwen <= '1';
         
             when others =>
-                o_pc    <= i_issued.instr.new_pc;
+                pcout    <= i_issued.instr.new_pc;
                 pcwen <= '0';
                 
         end case;
 
         -- Override whatever is going on o_pc to handle here with the interrupt logic.
         if (irpt_valid = '1') then
-            o_pc <= irpt_pc;
+            pcout <= irpt_pc;
         end if;
     end process JumpBranchHandling;
 
     global_stall_bus(cExecuteIndex) <= global_stall_bus(cMemAccessIndex) or bool2bit(exec.status.stall_reason /= NOT_STALLED);
 
+    -- Finally, after the ALU, Mext, and Jump/Branch handlers we have the first set of pipeline registers.
+    -- These registers keep the result from the ALU/Mext, the post-jump PC for some jumps, and handle the 
+    -- case where we are stalled.
+    -- We also pass forward the opA and opB outputs here, in case they are needed for instructions during the 
+    -- next pipeline stage.
     ExecuteStage: process(i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_resetn = '0') then
+            if (i_resetn = '0' or irpt_valid = '1') then
                 exec.reg_opA  <= (others => '0');
                 exec.reg_opB  <= (others => '0');
                 exec.alu_res  <= (others => '0');
@@ -408,6 +450,8 @@ begin
         end if;
     end process ExecuteStage;
 
+    -- The first logical unit following execute is the MemoryUnit. This translates read/write instructions
+    -- into AXI LITE transactions and then back into data for forwarding through the pipeline.
     eMemoryUnit : entity ndsmd_riscv.MemoryUnit
     generic map (
         cAddressWidth_b => cMemoryUnit_AddressWidth_b,
@@ -448,15 +492,32 @@ begin
         o_data_rready => o_data_rready
     );
 
+    -- For Zicsr operations, there are two types of operation, those with immediates and those that use registers.
+    -- The immediate ones use the raw value of the rs1 field as an unsigned immediate, while the register ones 
+    -- need to use the preserved opA from exec.
     CsrOpASelect: process(exec.status.instr, exec.reg_opA)
     begin
         if (exec.status.instr.source1 = IMMEDIATE) then
             csr_opA <= std_logic_vector(resize(unsigned(exec.status.instr.base.rs1), 32));
         else
-            csr_opA <= reg_opA;
+            csr_opA <= exec.reg_opA;
         end if;
     end process CsrOpASelect;
 
+    -- Here the command and status registers are handled. They are accessed through the instruction stream
+    -- by use of CSRRx instructions, and have outside effects especially regarding performance counters,
+    -- interrupts, and more.
+    -- In addition to the CSRRx instructions, the following instructions also are implemented within the
+    -- ZiCsr component:
+    -- $ ECALL: This generates a software interrupt to a higher priviledge level which then reads the value
+    --          of register A7 (?) and then executes the requested function. (WIP)
+    -- $ EBREAK: This initiates a communication process between the Zicsr and the DebugUnit that allows 
+    --           the debug unit access to running instructions. (WIP)
+    -- $ WFI: This initiates a stall until an interrupt occurs, allowing the system to simply halt without
+    --        requiring a jump loop. (WIP)
+    -- $ MRET: This formally completes the interrupt process. When MRET enters the pipeline, the PC updates
+    --         immediately, however it is only after this instruction is executed in ZiCsr that new interrupts
+    --         can occur. (WIP)
     eZiCsr : entity ndsmd_riscv.ZiCsr
     generic map (
         cTrapBaseAddress => cZiCsr_TrapBaseAddress
@@ -480,7 +541,7 @@ begin
         -- timer interrupts are self explanatory.
         i_irpt_timer => '0',
         
-        i_irpt_bkmkpc => writeback.bkmkpc,
+        i_irpt_bkmkpc => bkmkpc,
         o_irpt_pc     => irpt_pc,
         o_irpt_valid  => irpt_valid,
         o_irpt_mepc   => irpt_mepc
@@ -488,10 +549,12 @@ begin
 
     global_stall_bus(cMemAccessIndex) <= global_stall_bus(cWritebackIndex) or bool2bit(memaccess.status.stall_reason /= NOT_STALLED);
 
+    -- Following memory accesses adn Zicsr accesses, we need to store these results in the pipeline registers following.
+    -- These are implemented here, similar to the exec registers above.
     MemAccessStage: process(i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_resetn = '0') then
+            if (i_resetn = '0' or irpt_valid = '1') then
                 memaccess.status <= stage_status_t'(
                     id           => -1,
                     pc           => (others => '0'),
@@ -540,6 +603,10 @@ begin
                             -- Otherwise, we're stalled until the memory unit returns some data.
                             memaccess.status.stall_reason <= MEMORY_STALL;
                         end if;
+                    end if;
+
+                    if (exec.status.instr.csr_operation = CSRROP) then
+                        memaccess.csr_res <= csr_res;
                     end if;
 
                 elsif (global_stall_bus(cMemAccessIndex) = '1') then
@@ -591,6 +658,55 @@ begin
 
     global_stall_bus(cWritebackIndex) <= '0';
 
+    -- There is the possible case during interrupts where a jump occurs, and the icache
+    -- if implemented will miss, causing the pipeline to be empty and thereby not having any
+    -- instructions in flight. When this occurs, the Zicsr engine does not know where to point
+    -- mepc to, and then when mret occurs the PC will be set to the incorrect value.
+    -- 
+    -- The NextPcPredictor is supposed to alleviate that problem, as it will identify the next
+    -- sequential PC based on the PCs it has seen enter the pipeline. Or, if no PCs have entered 
+    -- since a jump occurred, the jump PC will be preserved.
+    --
+    -- When the pc updates, we need to use the updated pc to predict the next pc
+    -- This means when jumps occur, we predict the calculated jump pc, and when 
+    -- the pc updates naturally, we predict the pc + 4;
+    NextPcPredictor: process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_resetn = '0') then
+                predictor_pc <= (others => '0');
+            else
+                if (((pcwen and i_issued.valid) or irpt_valid) = '1') then
+                    predictor_pc <= pcout;
+                elsif (i_issued.valid = '1') then
+                    predictor_pc <= i_issued.pc + 4;
+                end if;
+            end if;
+        end if;
+    end process NextPcPredictor;
+
+    -- When an interrupt occurs, we need to bookmark our progress through the program. This means
+    -- that the latest in-flight, non-retired instruction is where we start off from when MRET
+    -- occurs. If no instructions are in flight, we can reasonably expect to pick up from where the
+    -- predictor expects the PC to go next.
+    BookmarkPcIdentification: process(memaccess, exec, i_issued, predictor_pc)
+    begin
+        -- If we have any valid in-flight instructions, bookmark them
+        if (memaccess.status.valid = '1') then
+            bkmkpc <= memaccess.status.pc;
+        elsif (exec.status.valid = '1') then
+            bkmkpc <= exec.status.pc;
+        elsif (i_issued.valid = '1') then
+            bkmkpc <= i_issued.pc;
+        else
+            -- otherwise, maintain a pointer to the next sequential instruction following
+            -- an instruction that reached writeback.
+            bkmkpc <= predictor_pc;
+        end if;
+    end process BookmarkPcIdentification;
+
+    -- During writeback, we finish writing values to the register file, doing a final result selection
+    -- operation to identify the correct result to be written back, and then retire the instruction.
     WritebackStage: process(i_clk)
     begin
         if rising_edge(i_clk) then
@@ -620,7 +736,6 @@ begin
                     rs2_hzd      => -1
                 );
 
-                writeback.bkmkpc <= (others => '0');
                 writeback.res    <= (others => '0');
                 writeback.rdwen  <= '0';
             else
@@ -628,16 +743,14 @@ begin
                 -- The global stall bus indicates the status of the current stage to the end, and
                 -- then the following stage.
 
-                if (writeback.status.valid = '1') then
-                    writeback.bkmkpc <= writeback.status.pc;
-                end if;
-
                 -- If the execute stage and all stages after it are not stalled, and the 
                 -- decode stage is also not stalled, we can accept a new instruction.
                 if (global_stall_bus(cMemAccessIndex) = '0') then
                     writeback.status  <= memaccess.status;
-                    if (memaccess.status.instr.mem_operation /= LOAD) then
+                    if (memaccess.status.instr.mem_operation /= LOAD and memaccess.status.instr.csr_operation /= CSRROP) then
                         writeback.res <= memaccess.exec_res;
+                    elsif (memaccess.status.instr.csr_operation = CSRROP) then
+                        writeback.res <= memaccess.csr_res;
                     else
                         writeback.res <= memaccess.mem_res;
                     end if;

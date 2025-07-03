@@ -167,9 +167,7 @@ begin
                     wait for 100 ps;
                 end loop;
                 
-            elsif run("t_bathtub_delay") then
-                info("Running bathtub delay with maxthroughput stall");
-                
+        
             elsif run("t_rand_cpu_stall") then
                 info("Running maxthroughput delay with random stall");
                 stimuli.resetn <= '0';
@@ -280,23 +278,9 @@ begin
                     rand_wait := rand.RandInt(0, 10);
                 end loop;
                 
-            elsif run("t_bathtub_cpu_stall") then
-                info("Running maxthroughput delay with bathtub stall");
-                
-            elsif run("t_bathtub_mem_stall") then
-                info("Running maxthroughput delay with bathtub stall");
-                
             elsif run("t_rand_delay_rand_cpu_mem_stall") then
                 info("Running random delay with random stall");
-                
-            elsif run("t_bathtub_delay_rand_cpu_mem_stall") then
-                info("Running bathtub delay with random stall");
-                
-            elsif run("t_rand_delay_bathtub_cpu_mem_stall") then
-                info("Running random delay with bathtub stall");
-                
-            elsif run("t_bathtub_delay_bathtub_cpu_mem_stall") then
-                info("Running bathtub delay with bathtub stall");
+                check(false);
                 
             end if;
         end loop;

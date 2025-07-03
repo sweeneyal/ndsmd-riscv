@@ -13,7 +13,7 @@ library ndsmd_riscv;
 
 entity ZiCsr is
     generic (
-        cTrapBaseAddress : unsigned(31 downto 0) 
+        cTrapBaseAddress : unsigned(31 downto 0)
     );
     port (
         i_clk : in std_logic;
@@ -50,6 +50,9 @@ entity ZiCsr is
 end entity ZiCsr;
 
 architecture rtl of ZiCsr is
+    -- MXL, 4 zeros, and 26 bits of extensions
+    constant cMisa : std_logic_vector(31 downto 0) := "01" & "0000" & "00"&"0000"&"0000"&"0001"&"0001"&"0000"&"0000";
+
     type machine_csr_t is record
         -- register the reports the ISA supported by the hart 
         misa      : std_logic_vector(31 downto 0);
@@ -106,6 +109,8 @@ architecture rtl of ZiCsr is
         variable fault : std_logic;
         variable hpmaddr : natural;
     begin
+        o_csr := (others => '0');
+
         case to_natural(i_addr) is
             when 16#300# =>
                 o_csr := i_mcsr.mstatus(31 downto 0);
@@ -183,8 +188,8 @@ architecture rtl of ZiCsr is
             when 16#300# =>
                 o_mcsr.mstatus(31 downto 0) <= i_res;
 
-            when 16#301# =>
-                o_mcsr.misa <= i_res;
+            -- when 16#301# =>
+            --     o_mcsr.misa <= i_res;
 
             when 16#304# =>
                 o_mcsr.mie <= i_res;
@@ -279,7 +284,7 @@ begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
                 -- Machine CSRs
-                mcsr.misa      <= (others => '0');
+                mcsr.misa      <= cMisa;
                 mcsr.mvendorid <= (others => '0');
                 mcsr.marchid   <= (others => '0');
                 mcsr.mimpid    <= (others => '0');
@@ -342,9 +347,10 @@ begin
                     -- turn off mie
                     mcsr.mstatus(cMIE)  <= '0';
                     mcsr.mstatus(cMPIE) <= mcsr.mstatus(cMIE);
-                    -- store the last completed pc + 4 into mepc, since we have 
-                    -- completed i_pc but not yet the next pc, i_pc + 4;
-                    mcsr.mepc           <= i_irpt_bkmkpc + 4;
+                    -- We will store the last uncompleted pc, that is, the pc of the last
+                    -- in progress instruction (if any), or the last pc issued by the control that
+                    -- did not complete.  
+                    mcsr.mepc           <= i_irpt_bkmkpc;
                 elsif (i_decoded.csr_operation = MRET) then
                     mcsr.mstatus(cMIE)  <= mcsr.mstatus(cMPIE);
                     mcsr.mstatus(cMPIE) <= '1';
@@ -373,11 +379,16 @@ begin
                         when CSRRW =>
                             csr := i_opA;
                         when CSRRS =>
-                            csr := csr or i_opA;
+                            if (i_decoded.base.rs1 /= "00000") then
+                                csr := csr or i_opA;
+                            end if;
                         when CSRRC =>
-                            csr := csr and (not i_opA);
+                            if (i_decoded.base.rs1 /= "00000") then
+                                csr := csr and (not i_opA);
+                            end if;
                     end case;
 
+                    -- Need to add support for additional side effects
                     write_machine_csr(
                         o_mcsr  => mcsr,
                         i_addr  => i_decoded.base.itype,
