@@ -72,8 +72,8 @@ begin
                 num_product_s0 <= (others => '0');
                 den_product_s0 <= (others => '0');
 
-                num_product_s1 <= (others => '0');
-                den_product_s1 <= (others => '0');
+                -- num_product_s1 <= (others => '0');
+                -- den_product_s1 <= (others => '0');
 
                 num_product <= (others => '0');
                 den_product <= (others => '0');
@@ -82,13 +82,20 @@ begin
                 num_product_s0 <= gdu_engine.num * gdu_engine.fval;
                 den_product_s0 <= gdu_engine.denom * gdu_engine.fval;
 
-                valid_s1       <= valid_s0;
-                num_product_s1 <= num_product_s0;
-                den_product_s1 <= den_product_s0;
+                -- Uncomment these if we plan to use a three stage
+                -- multiplier instead of a two stage.
+                
+                -- valid_s1       <= valid_s0;
+                -- num_product_s1 <= num_product_s0;
+                -- den_product_s1 <= den_product_s0;
 
-                stage1_done <= valid_s1;
-                num_product <= num_product_s1;
-                den_product <= den_product_s1;
+                -- stage1_done <= valid_s1;
+                -- num_product <= num_product_s1;
+                -- den_product <= den_product_s1;
+
+                stage1_done <= valid_s0;
+                num_product <= num_product_s0;
+                den_product <= den_product_s0;
             end if;
         end if;
     end process Multiplier;

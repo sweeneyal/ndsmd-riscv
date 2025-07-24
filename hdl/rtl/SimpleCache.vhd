@@ -24,12 +24,12 @@ entity SimpleCache is
         o_cache_rdata  : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
         o_cache_rvalid : out std_logic;
 
-        i_memory_addr   : in std_logic_vector(cAddrWidth_b - 1 downto 0);
-        i_memory_en     : in std_logic;
-        i_memory_wen    : in std_logic_vector(cCachelineSize_B - 1 downto 0);
-        i_memory_wdata  : in std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
-        o_memory_rdata  : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
-        o_memory_rvalid : out std_logic
+        i_mem_addr   : in std_logic_vector(cAddrWidth_b - 1 downto 0);
+        i_mem_en     : in std_logic;
+        i_mem_wen    : in std_logic_vector(cCachelineSize_B - 1 downto 0);
+        i_mem_wdata  : in std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+        o_mem_rdata  : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+        o_mem_rvalid : out std_logic
     );
 end entity SimpleCache;
 
