@@ -375,7 +375,8 @@ begin
                 v(cMPIE)    := '1';
                 check(responses.res = v);
 
-                --check(false);
+                -- TODO: Add testing for the sw trigger, the timer trigger, and the generic interrupts
+
             end if;
         end loop;
     
