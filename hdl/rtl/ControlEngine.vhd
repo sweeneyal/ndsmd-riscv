@@ -357,19 +357,23 @@ architecture rtl of ControlEngine is
                         -- EBREAK is not an instruction that retires, so when it gets to 
                         -- writeback let it expire. 
                     elsif (instr.funct7 = "0011000" and instr.rs2 = "00010") then
-                        -- MRET
-                        -- Reskin this as a form of jump
                         -- Add MRET to the list of jump_branch enums, so we can simply just use
                         -- the functionality of JUMPs for MRET.
+                        decoded.jump_branch   := MRET;
+
                         -- Will also need to handle MRET in ZICSR but in doing so
                         -- just change the registers, not actually affect the 
                         -- processor. Once the MRET passes the appropriate stage,
                         -- then we can allow the change to apply.
+                        decoded.csr_operation := CSRROP;
                     elsif (instr.funct7 = "0001000" and instr.rs2 = "00101") then
                         -- WFI
-                        -- This will be interesting to implement.
+                        -- This will be interesting to implement. This probably needs to be 
+                        -- some form of semi-permanent stall instruction that causes the Zicsr
+                        -- to sit in an incomplete state until an interrupt occurs.
                     else
                         -- Malformed instruction
+                        assert false report "ControlEngine::contextual_decode: Malformed Instruction" severity failure;
                     end if;
                 else
                     decoded.csr_operation := CSRROP;

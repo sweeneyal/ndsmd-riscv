@@ -116,6 +116,9 @@ package body ZiCsr_Utility is
                 else
                     assert false report "CSR source can only be source or immediate" severity error;
                 end if;
+
+            when NULL_OP => 
+                assert false report "Cannot be null op" severity error;
         
         end case;
         

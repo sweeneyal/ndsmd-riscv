@@ -317,7 +317,7 @@ begin
                 end case;
                 
             when JAL =>
-                pcout    <= i_issued.instr.new_pc;
+                pcout <= i_issued.instr.new_pc;
                 pcwen <= '1';
 
             when JALR =>
@@ -326,6 +326,10 @@ begin
                 -- Every other option in this setup has the target address precomputed instead.
                 alu_res <= std_logic_vector(i_issued.instr.new_pc);
                 pcout    <= unsigned(alu_out);
+                pcwen <= '1';
+
+            when MRET =>
+                pcout <= irpt_mepc;
                 pcwen <= '1';
         
             when others =>

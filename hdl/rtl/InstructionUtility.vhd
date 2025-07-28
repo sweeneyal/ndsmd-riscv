@@ -105,12 +105,12 @@ package InstructionUtility is
 
     -- The new address is resolved during decoding, and as such needs to be tracked 
     -- through the datapath. Issuance is also tracked through a pipeline queue.
-    type jump_type_t is (NOT_JUMP, JAL, JALR, BRANCH);
+    type jump_type_t is (NOT_JUMP, JAL, JALR, BRANCH, MRET);
     type condition_t is (NO_COND, LESS_THAN, EQUAL, NOT_EQUAL, GREATER_THAN_EQ);
 
     -- CSR operations
     type csr_operation_t is (NULL_OP, ECALL, EBREAK, MRET, WFI, CSRROP);
-    type csr_access_t is (CSRRW, CSRRS, CSRRC);
+    type csr_access_t is (NULL_OP, CSRRW, CSRRS, CSRRC);
 
     -- The destination of the instruction is either a register, memory, or it is a branch
     -- instruction where there is no destination.

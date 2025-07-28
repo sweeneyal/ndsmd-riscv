@@ -268,10 +268,10 @@ architecture rtl of ZiCsr is
     signal pending : std_logic_vector(31 downto 0) := (others => '0');
 begin
 
-    pending(31 downto 16) <= i_irpt_gen;
-    pending(cMEI)         <= i_irpt_ext;
-    pending(cMTI)         <= i_irpt_timer;
-    pending(cMSI)         <= i_irpt_sw;
+    pending(31 downto 16) <= mcsr.mstatus(cMIE) and i_irpt_gen;
+    pending(cMEI)         <= mcsr.mstatus(cMIE) and i_irpt_ext;
+    pending(cMTI)         <= mcsr.mstatus(cMIE) and i_irpt_timer;
+    pending(cMSI)         <= mcsr.mstatus(cMIE) and i_irpt_sw;
 
     o_irpt_mepc <= mcsr.mepc;
     
@@ -386,6 +386,8 @@ begin
                             if (i_decoded.base.rs1 /= "00000") then
                                 csr := csr and (not i_opA);
                             end if;
+                        when NULL_OP =>
+                            assert false report "Malformed instruction, cannot be NULL_OP." severity error;
                     end case;
 
                     -- Need to add support for additional side effects
