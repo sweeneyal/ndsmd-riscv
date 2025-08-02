@@ -367,10 +367,12 @@ architecture rtl of ControlEngine is
                         -- then we can allow the change to apply.
                         decoded.csr_operation := CSRROP;
                     elsif (instr.funct7 = "0001000" and instr.rs2 = "00101") then
-                        -- WFI
-                        -- This will be interesting to implement. This probably needs to be 
-                        -- some form of semi-permanent stall instruction that causes the Zicsr
-                        -- to sit in an incomplete state until an interrupt occurs.
+                        -- The irpt_wfi bit gets set when this instruction is run. Due to
+                        -- the timing of it, the WFI instruction gets retired but the following downstream instructions
+                        -- are then stalled.
+                        -- The Datapath then sit in a form of semi-permanent stall instruction
+                        -- that causes the Zicsr to sit in an incomplete state until an interrupt occurs.
+                        decoded.csr_operation := WFI;
                     else
                         -- Malformed instruction
                         assert false report "ControlEngine::contextual_decode: Malformed Instruction" severity failure;
