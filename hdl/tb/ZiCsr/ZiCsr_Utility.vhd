@@ -25,6 +25,7 @@ package ZiCsr_Utility is
         irpt_pc     : unsigned(31 downto 0);
         irpt_valid  : std_logic;
         irpt_mepc   : unsigned(31 downto 0);
+        irpt_wfi    : std_logic;
     end record responses_t;
 
     function generate_read_instruction(

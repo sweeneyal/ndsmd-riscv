@@ -132,6 +132,7 @@ architecture rtl of Datapath is
     signal irpt_valid : std_logic := '0';
     signal irpt_mepc  : unsigned(31 downto 0) := (others => '0');
     signal irpt_reset : std_logic := '0';
+    signal irpt_wfi   : std_logic := '0';
 
     constant cDecodeIndex : natural := 0;
 
@@ -544,6 +545,8 @@ begin
         i_irpt_sw    => '0', 
         -- timer interrupts are self explanatory.
         i_irpt_timer => '0',
+        -- wfi signal causes the datapath to stall until an interrupt occurs.
+        o_irpt_wfi   => irpt_wfi,
         
         i_irpt_bkmkpc => bkmkpc,
         o_irpt_pc     => irpt_pc,
@@ -551,7 +554,8 @@ begin
         o_irpt_mepc   => irpt_mepc
     );
 
-    global_stall_bus(cMemAccessIndex) <= global_stall_bus(cWritebackIndex) or bool2bit(memaccess.status.stall_reason /= NOT_STALLED);
+    global_stall_bus(cMemAccessIndex) <= global_stall_bus(cWritebackIndex) 
+        or bool2bit(memaccess.status.stall_reason /= NOT_STALLED) or irpt_wfi;
 
     -- Following memory accesses adn Zicsr accesses, we need to store these results in the pipeline registers following.
     -- These are implemented here, similar to the exec registers above.

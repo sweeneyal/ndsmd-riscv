@@ -36,6 +36,8 @@ entity ZiCsr is
         i_irpt_sw    : in std_logic;
         -- Timer interrupt signal
         i_irpt_timer : in std_logic;
+        -- Wait for interrupt signal
+        o_irpt_wfi : out std_logic;
         
         -- Interupt Control Interface
         -- Last Completed PC serving as bookmark
@@ -266,6 +268,8 @@ architecture rtl of ZiCsr is
     end function;
 
     signal pending : std_logic_vector(31 downto 0) := (others => '0');
+
+    signal irpt_wfi : std_logic := '0';
 begin
 
     pending(31 downto 16) <= mcsr.mstatus(cMIE) and i_irpt_gen;
@@ -274,6 +278,8 @@ begin
     pending(cMSI)         <= mcsr.mstatus(cMIE) and i_irpt_sw;
 
     o_irpt_mepc <= mcsr.mepc;
+
+    o_irpt_wfi <= irpt_wfi;
     
     RegisterImplementation: process(i_clk)
         variable csr        : std_logic_vector(31 downto 0) := (others => '0');
@@ -343,7 +349,16 @@ begin
                 mcsr.mcause(31)          <= bool2bit(mip /= x"00000000");
                 mcsr.mcause(30 downto 0) <= mcause;
 
+                if (i_decoded.csr_operation = WFI) then
+                    -- Set the wfi signal, causing all following instructions to stall
+                    -- until irpt_wfi is cleared.
+                    irpt_wfi <= '1';
+                end if;
+
                 if (irpt_valid = '1') then
+                    -- clear wait-for-interrupt signal if any exists
+                    irpt_wfi <= '0';
+
                     -- turn off mie
                     mcsr.mstatus(cMIE)  <= '0';
                     mcsr.mstatus(cMPIE) <= mcsr.mstatus(cMIE);
