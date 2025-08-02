@@ -1,4 +1,4 @@
-from vunit import VUnit
+from vunit.ui import VUnit
 import pathlib
 
 def get_vhdl_files(dir, recursive=False):

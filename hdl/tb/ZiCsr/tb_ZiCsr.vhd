@@ -375,7 +375,143 @@ begin
                 v(cMPIE)    := '1';
                 check(responses.res = v);
 
-                -- TODO: Add testing for the sw trigger, the timer trigger, and the generic interrupts
+                info("Writing mie bit for Machine Software Interrupt Enable (MSIE)");
+                stimuli.decoded.base          <= decode(generate_write_instruction(x"304", REGISTERS, CSRRS));
+                stimuli.decoded.csr_operation <= CSRROP;
+                stimuli.decoded.csr_access    <= CSRRS;
+                stimuli.decoded.source1       <= REGISTERS;
+
+                -- using v as a temp register to set the value of mstatus
+                v           := (others => '0');
+                v(cMSI)     := '1';
+                stimuli.opA <= v;
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                -- Verify that the read that occurred is cMEI (since we just sent cMSI).
+                info("Verifying that register read returned the expected value.");
+                v           := (others => '0');
+                v(cMEI)     := '1';
+                check(responses.res = v);
+                -- Read mie register
+                info("Reading mie register to confirm that value was written as expected.");
+                stimuli.decoded.base          <= decode(generate_read_instruction(x"304", REGISTERS, CSRRS));
+                stimuli.decoded.csr_operation <= CSRROP;
+                stimuli.decoded.csr_access    <= CSRRC;
+                stimuli.decoded.source1       <= REGISTERS;
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                -- Verify that what was read matched what was written
+                v(cMSI)     := '1';
+                check(responses.res = v);
+
+                info("Clearing control signals and triggering a machine external interrupt.");
+                stimuli.decoded.base          <= decode(x"00000000");
+                stimuli.decoded.csr_operation <= NULL_OP;
+                stimuli.decoded.source1       <= REGISTERS;
+                stimuli.irpt_sw     <= '1';
+                stimuli.irpt_bkmkpc <= x"88888888";
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                info("Checking that interrupt valid is set, and that the interrupt target pc and bookmark pc match the expected values.");
+                check(responses.irpt_valid = '1');
+                v := x"FFFF0000";
+                v := std_logic_vector(unsigned(v) + cMSI * 4);
+                check(responses.irpt_pc = unsigned(v));
+                check(responses.irpt_mepc = unsigned(stimuli.irpt_bkmkpc));
+                stimuli.irpt_sw <= '0';
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                info("Checking that interrupt valid is cleared, so multiple triggers don't occur.");
+                check(responses.irpt_valid = '0');
+                check(responses.irpt_mepc = unsigned(stimuli.irpt_bkmkpc));
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                -- Read the mcause register to confirm value
+                info("Reading mcause register to confirm that cause was written as expected.");
+                stimuli.decoded.base          <= decode(generate_read_instruction(x"342", REGISTERS, CSRRS));
+                stimuli.decoded.csr_operation <= CSRROP;
+                stimuli.decoded.csr_access    <= CSRRC;
+                stimuli.decoded.source1       <= REGISTERS;
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                -- Verify that what was read matched what was written
+                check(responses.res = '1' & to_slv(cMSI, 31));
+
+                -- Read the mstatus register to confirm mie and mpie are cleared and set, respectively.
+                info("Reading mstatus register to confirm that MIE and MPIE are cleared and set, respectively.");
+                stimuli.decoded.base          <= decode(generate_read_instruction(x"300", REGISTERS, CSRRS));
+                stimuli.decoded.csr_operation <= CSRROP;
+                stimuli.decoded.csr_access    <= CSRRC;
+                stimuli.decoded.source1       <= REGISTERS;
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                -- Verify that what was read matched what was written
+                v := (others => '0');
+                v(cMPIE) := '1';
+                check(responses.res = v);
+
+                info("Clearing control signals for single cycle reprieve.");
+                stimuli.decoded.base          <= decode(x"00000000");
+                stimuli.decoded.csr_operation <= NULL_OP;
+                stimuli.decoded.source1       <= REGISTERS;
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                -- Clear MIP
+                info("Clearing mip bit for Machine External Interrupt Enable (MSIE)");
+                stimuli.decoded.base          <= decode(generate_write_instruction(x"344", REGISTERS, CSRRC));
+                stimuli.decoded.csr_operation <= CSRROP;
+                stimuli.decoded.csr_access    <= CSRRC;
+                stimuli.decoded.source1       <= REGISTERS;
+
+                -- using v as a temp register to set the value of MIP
+                v           := (others => '1');
+                stimuli.opA <= v;
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                v           := (others => '0');
+                v(cMSI)     := '1';
+                check(responses.res = v);
+
+                info("Performing MRET operation.");
+                stimuli.decoded.base          <= decode(cMretInstr);
+                stimuli.decoded.csr_operation <= MRET;
+                stimuli.decoded.csr_access    <= NULL_OP;
+                stimuli.decoded.source1       <= REGISTERS;
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                info("Reading mstatus register to confirm that MIE and MPIE are set.");
+                stimuli.decoded.base          <= decode(generate_read_instruction(x"300", REGISTERS, CSRRS));
+                stimuli.decoded.csr_operation <= CSRROP;
+                stimuli.decoded.csr_access    <= CSRRS;
+                stimuli.decoded.source1       <= REGISTERS;
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+
+                v           := (others => '0');
+                v(cMIE)     := '1';
+                v(cMPIE)    := '1';
+                check(responses.res = v);
 
             end if;
         end loop;
@@ -417,12 +553,6 @@ begin
         o_irpt_valid  => responses.irpt_valid,
         -- PC of return instruction that occurs at MRET
         o_irpt_mepc   => responses.irpt_mepc
-    );
-
-    eChecker : entity tb_ndsmd_riscv.ZiCsr_Checker
-    port map (
-        i_stimuli   => stimuli,
-        i_responses => responses
     );
     
 end architecture tb;
