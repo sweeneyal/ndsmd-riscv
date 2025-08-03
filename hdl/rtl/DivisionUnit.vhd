@@ -78,9 +78,22 @@ begin
                 num_product <= (others => '0');
                 den_product <= (others => '0');
             else
-                valid_s0       <= valid;
-                num_product_s0 <= gdu_engine.num * gdu_engine.fval;
-                den_product_s0 <= gdu_engine.denom * gdu_engine.fval;
+                -- These if checks are primarily here to reduce unused multiplication
+                -- instructions, because during simulation these multipliers take 
+                -- longer to simulate even when unused.
+                -- Hopefully this still infers a pipelined multiplier rather than
+                -- a single-cycle 64 bit multiplier.
+                valid_s0 <= valid;
+                if (valid = '1') then
+                    num_product_s0 <= gdu_engine.num * gdu_engine.fval;
+                    den_product_s0 <= gdu_engine.denom * gdu_engine.fval;
+                end if;
+                
+                stage1_done <= valid_s0;
+                if (valid_s0 = '1') then
+                    num_product <= num_product_s0;
+                    den_product <= den_product_s0;
+                end if;
 
                 -- Uncomment these if we plan to use a three stage
                 -- multiplier instead of a two stage.
@@ -93,9 +106,6 @@ begin
                 -- num_product <= num_product_s1;
                 -- den_product <= den_product_s1;
 
-                stage1_done <= valid_s0;
-                num_product <= num_product_s0;
-                den_product <= den_product_s0;
             end if;
         end if;
     end process Multiplier;
