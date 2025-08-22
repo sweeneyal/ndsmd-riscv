@@ -4,7 +4,6 @@ library ieee;
 
 library ndsmd_riscv;
     use ndsmd_riscv.CommonUtility.all;
-    
 
 entity DualPortBram is
     generic (
