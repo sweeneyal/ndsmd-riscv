@@ -4,10 +4,9 @@ library ieee;
 
 use std.textio.all;
 
-library universal;
-    use universal.CommonFunctions.all;
-    use universal.CommonTypes.all;
-
+library ndsmd_riscv;
+    use ndsmd_riscv.CommonUtility.all;
+    
 entity SimpleCache is
     generic (
         cAddrWidth_b     : natural := 32;

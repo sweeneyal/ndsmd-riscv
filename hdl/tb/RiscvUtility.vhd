@@ -7,11 +7,8 @@ library osvvm;
     use osvvm.RandomPkg.all;
     use osvvm.RandomBasePkg.all;
 
-library universal;
-    use universal.CommonFunctions.all;
-    use universal.CommonTypes.all;
-
 library ndsmd_riscv;
+    use ndsmd_riscv.CommonUtility.all;
     use ndsmd_riscv.InstructionUtility.all;
     use ndsmd_riscv.DatapathUtility.all;
 

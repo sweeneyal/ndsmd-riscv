@@ -2,10 +2,8 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library universal;
-    use universal.CommonFunctions.all;
-
 library ndsmd_riscv;
+    use ndsmd_riscv.CommonUtility.all;
     use ndsmd_riscv.InstructionUtility.all;
     use ndsmd_riscv.DatapathUtility.all;
 

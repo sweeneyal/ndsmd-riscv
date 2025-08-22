@@ -20,12 +20,11 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library universal;
-    use universal.CommonFunctions.all;
-
+    
 library simtools;
-
+    
 library ndsmd_riscv;
+    use ndsmd_riscv.CommonUtility.all;
     use ndsmd_riscv.InstructionUtility.all;
     use ndsmd_riscv.DatapathUtility.all;
 

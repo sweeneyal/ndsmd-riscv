@@ -2,11 +2,8 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library universal;
-    use universal.CommonFunctions.all;
-    use universal.CommonTypes.all;
-
 library ndsmd_riscv;
+    use ndsmd_riscv.CommonUtility.all;
     use ndsmd_riscv.InstructionUtility.all;
     use ndsmd_riscv.DatapathUtility.all;
     use ndsmd_riscv.ZicsrUtility.all;
@@ -55,6 +52,8 @@ architecture rtl of ZiCsr is
     -- MXL, 4 zeros, and 26 bits of extensions
     constant cMisa : std_logic_vector(31 downto 0) := "01" & "0000" & "00"&"0000"&"0000"&"0001"&"0001"&"0000"&"0000";
 
+    type hpm_array_t is array (3 to 31) of unsigned(63 downto 0);
+
     type machine_csr_t is record
         -- register the reports the ISA supported by the hart 
         misa      : std_logic_vector(31 downto 0);
@@ -76,11 +75,11 @@ architecture rtl of ZiCsr is
         mie       : std_logic_vector(31 downto 0);
 
         -- register that counts the number of clock cycles elapsed 
-        mcycle        : u64_t;
+        mcycle        : unsigned(63 downto 0);
         -- register that counts the number of instructions retired
-        minstret      : u64_t;
+        minstret      : unsigned(63 downto 0);
         -- registers that count the number of events in the corresponding hpm events
-        mhpmcounters  : u64_array_t(3 to 31);
+        mhpmcounters  : hpm_array_t;
         -- registers that holds what event increments the hpm counters
         mhpmevents    : std_logic_matrix_t(3 to 31)(31 downto 0);
         -- register that controls which of the counters can be read

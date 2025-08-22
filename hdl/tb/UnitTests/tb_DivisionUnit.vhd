@@ -9,11 +9,8 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library universal;
-    use universal.CommonFunctions.all;
-    use universal.CommonTypes.all;
-
 library ndsmd_riscv;
+    use ndsmd_riscv.CommonUtility.all;
 
 entity tb_DivisionUnit is
     generic (runner_cfg : string);
