@@ -206,6 +206,9 @@ begin
         i_data_rvalid => m_axi_data_rvalid,
         o_data_rready => m_axi_data_rready
     );
-    
+
+    -- Add a GDB remote debugger here, of some kind. No idea how I would implement this but we need a 
+    -- debugger to talk to.
+    -- https://en.wikipedia.org/wiki/GNU_Debugger    
     
 end architecture rtl;
