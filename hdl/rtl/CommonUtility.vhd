@@ -5,7 +5,8 @@ library ieee;
 
 package CommonUtility is
 
-    subtype byte is std_logic_vector(7 downto 0);
+    subtype byte_t is std_logic_vector(7 downto 0);
+    type byte_array_t is array (natural range <>) of byte_t;
     type std_logic_matrix_t is array (natural range <>) of std_logic_vector;
     
     function clog2(intVal : integer) return integer;
@@ -14,9 +15,11 @@ package CommonUtility is
     function to_slv(intVal : integer; size : natural) return std_logic_vector;
     function to_integer(vector : std_logic_vector) return integer;
     function to_natural(vector : std_logic_vector) return natural;
-    function to_byte(char : character) return byte;
-    function to_char(by : byte) return character;
+    function to_byte(char : character) return byte_t;
+    function to_char(by : byte_t) return character;
 
+    -- Not recommended for use in synthesizable code
+    -- Will attempt to make arbitrary length division in a single cycle.
     function divide(lhs : unsigned; rhs : unsigned) return unsigned;
     function divide(lhs : signed; rhs : signed) return signed;
 
@@ -79,12 +82,12 @@ package body CommonUtility is
         end if;
     end function;
 
-    function to_byte(char : character) return byte is
+    function to_byte(char : character) return byte_t is
     begin
-        return byte(to_unsigned(character'pos(char), 8));
+        return byte_t(to_unsigned(character'pos(char), 8));
     end function;
 
-    function to_char(by : byte) return character is
+    function to_char(by : byte_t) return character is
     begin
         return character'val(to_integer(unsigned(by)));
     end function;
