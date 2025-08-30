@@ -61,7 +61,8 @@ begin
                             state     <= LOAD_BIT;
                         end if;
                     when LOAD_BIT =>
-                        o_tx <= txDataReg(bitIndex);
+                        o_tx  <= txDataReg(bitIndex);
+                        state <= SEND_BIT;
                         bitIndex := bitIndex + 1;
                         bitTimer := cClocksPerBit;
 
