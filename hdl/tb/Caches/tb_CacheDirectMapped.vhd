@@ -86,12 +86,6 @@ begin
         test_runner_setup(runner, runner_cfg);
   
         while test_suite loop
-            -- types of tests needed:
-            --  verification of specific behaviors of registers
-            --    e.g., event counters, timer, instret, etc.
-            --  verification of interrupt performance
-            --    e.g., for a given set of interrupts, which one takes priority, 
-            --     whats the target address, behavior that occurs on mret
             if run("t_cache_demonstration") then
                 info("Running basic cache demonstration.");
                 resetn <= '0';
@@ -224,6 +218,18 @@ begin
 
                     wait until rising_edge(clk);
                     wait for 100 ps;
+                end loop;
+            elsif run("t_cache_bytewise_testing") then
+                info("Running bytewise cache testing.");
+                resetn <= '0';
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                resetn <= '1';
+
+                -- Autofail for now, we need to run several tests that basically 
+                -- try byte-by-byte reads followed by byte-by-byte writes to demonstrate
+                -- the full functionality of the interface.
+                check(false);
                 end loop;
             end if;
         end loop;
