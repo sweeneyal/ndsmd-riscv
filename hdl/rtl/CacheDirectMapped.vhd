@@ -60,7 +60,7 @@ architecture rtl of CacheDirectMapped is
     signal write_hit        : std_logic := '0';
     signal write_miss       : std_logic := '0';
 
-    type state_t is (RESET, IDLE, REQUEST_MEM_READ, REQUEST_MEM_WRITE, DONE);
+    type state_t is (RESET, IDLE, REQUEST_MEM_READ, REQUEST_MEM_WRITE);
     signal state : state_t := RESET;
 
     type cache_status_t is record
@@ -88,7 +88,7 @@ begin
         cAddressWidth_b - 1 downto clog2(cCacheSize_entries) + clog2(cCachelineSize_B));
 
     -- Since we don't allow back-to-back accesses, we disallow that by filtering one cycle after.
-    cache_en  <= i_cache_en and not en_reg;
+    cache_en  <= i_cache_en and bool2bit(state = IDLE);
     -- Since we're not doing byte addressable caching, we just check if any of them need to be written.
     cache_wen <= any(i_cache_wen);
 
@@ -193,8 +193,6 @@ begin
                 valid           <= '0';
 
             else
-                valid <= '0';
-
                 case state is
                     when RESET =>
                         -- TODO: Entirely empty the metadata of the cache to an invalid state
@@ -215,6 +213,8 @@ begin
                         -- Preserve the status so we know our state we need to transition to
                         status.is_write <= is_write;
                         status.is_hit   <= is_hit;
+                        
+                        valid <= '0';
 
                         if (write_miss = '1') then
                             if (metadata.dirty = '1') then
@@ -234,7 +234,8 @@ begin
 
                         elsif (write_hit = '1') then
                             -- need to read cache, edit and writeback to cache while returning valid
-                            state <= IDLE;
+                            en_reg <= '0';
+                            state  <= IDLE;
                             for ii in 0 to cCachelineSize_B - 1 loop
                                 if (wen_reg(ii) = '1') then
                                     rdata(8 * ii + 7 downto 8 * ii) <= cache_wdata_reg(8 * ii + 7 downto 8 * ii);
@@ -250,7 +251,8 @@ begin
                             metadata_w.upper_address <= upper_addr_reg;
                         elsif (read_hit = '1') then
                             -- read hit, no change
-                            state <= IDLE;
+                            en_reg <= '0';
+                            state  <= IDLE;
                         elsif (read_miss = '1') then
                             if (metadata.dirty = '1') then
                                 -- need to write memory, read memory, then writeback to cache while returning valid
@@ -296,15 +298,15 @@ begin
                             metadata_w.upper_address <= upper_addr_reg;
 
                             en_reg <= '0';
-                            state <= DONE;
+                            state <= IDLE;
                         end if;
 
-                    when DONE =>
-                        -- Additional cycle since enables are maintained high as input into
-                        -- this module, which means we can accidentally initiate multiple accesses
-                        -- inappropriately back to back.
-                        valid <= '0';
-                        state <= IDLE;
+                    -- when DONE =>
+                    --     -- Additional cycle since enables are maintained high as input into
+                    --     -- this module, which means we can accidentally initiate multiple accesses
+                    --     -- inappropriately back to back.
+                    --     valid <= '0';
+                    --     state <= IDLE;
 
                 end case;
             end if;

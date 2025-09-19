@@ -81,7 +81,7 @@ begin
     );
     
     TestRunner : process
-        variable v : std_logic_vector(31 downto 0) := (others => '0');
+        variable v : natural := 0;
     begin
         test_runner_setup(runner, runner_cfg);
   
@@ -226,10 +226,57 @@ begin
                 wait for 100 ps;
                 resetn <= '1';
 
-                -- Autofail for now, we need to run several tests that basically 
-                -- try byte-by-byte reads followed by byte-by-byte writes to demonstrate
-                -- the full functionality of the interface.
-                check(false);
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                info("Demonstration of bytewise read behavior.");
+                -- What this test demonstrates is that the cache can grab the correct cacheline
+                -- regardless of the individual byte being pointed to by the address. It was always
+                -- understood that the byte-indexing bits of the address were unused, this really
+                -- shows that repeated read accesses are in fact faster, and are supported.
+                for ii in 0 to cCachelineSize_B * cCacheSize_entries - 1 loop
+                    cache.addr  <= std_logic_vector(to_unsigned(ii, cAddressWidth_b));
+                    cache.en    <= '1';
+                    cache.wen   <= (others => '0');
+                    cache.wdata <= (others => '0');
+
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+
+                    report integer'image(ii);
+                    if (ii mod cCachelineSize_B = 0) then
+                        check(cache_miss = '1');
+                        
+                        wait until rising_edge(clk);
+                        wait for 100 ps;
+                        
+                        check(cache_miss = '0');
+                        check(memory.addr = cache.addr);
+                        check(memory.en   = cache.en);
+                        check(memory.wen  = cache.wen);
+                        
+                        v := v + 1;
+                        memory.rdata <= std_logic_vector(to_unsigned(v, 8 * cCachelineSize_B));
+                        memory.valid <= '1';
+    
+                        wait until rising_edge(clk);
+                        wait for 100 ps;
+    
+                        memory.valid <= '0';
+    
+                        check(cache.rdata = memory.rdata);
+                        check(cache.valid = '1');
+                        cache.en <= '0';
+                        wait until rising_edge(clk);
+                        wait for 100 ps;
+                    else
+                        check(cache_miss = '0');
+                        check(cache_hit = '1');
+                        check(cache.rdata = std_logic_vector(to_unsigned(v, 8 * cCachelineSize_B)));
+                        check(cache.valid = '1');
+    
+                        wait until rising_edge(clk);
+                        wait for 100 ps;
+                    end if;
                 end loop;
             end if;
         end loop;
