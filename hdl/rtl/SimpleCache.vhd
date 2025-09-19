@@ -9,8 +9,10 @@ library ndsmd_riscv;
     
 entity SimpleCache is
     generic (
-        cAddrWidth_b     : natural := 32;
-        cCachelineSize_B : natural := 16
+        cCacheType         : string  := "Direct";
+        cAddrWidth_b       : natural := 32;
+        cCachelineSize_B   : natural := 16;
+        cCacheSize_entries : positive := 1024
     );
     port (
         i_clk    : in std_logic;
@@ -23,18 +25,21 @@ entity SimpleCache is
         o_cache_rdata  : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
         o_cache_rvalid : out std_logic;
 
-        i_mem_addr   : in std_logic_vector(cAddrWidth_b - 1 downto 0);
-        i_mem_en     : in std_logic;
-        i_mem_wen    : in std_logic_vector(cCachelineSize_B - 1 downto 0);
-        i_mem_wdata  : in std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
-        o_mem_rdata  : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
-        o_mem_rvalid : out std_logic
+        o_cache_hit  : out std_logic;
+        o_cache_miss : out std_logic;
+        o_mem_addr   : out std_logic_vector(cAddrWidth_b - 1 downto 0);
+        o_mem_en     : out std_logic;
+        o_mem_wen    : out std_logic_vector(cCachelineSize_B - 1 downto 0);
+        o_mem_wdata  : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+        i_mem_rdata  : in std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+        i_mem_rvalid : in std_logic
     );
 end entity SimpleCache;
 
 architecture rtl of SimpleCache is
     
 begin
+    
     
     
     

@@ -37,6 +37,8 @@ package CommonUtility is
     function find_first_high_bit(slv : std_logic_vector) return natural;
     function find_first_high_bit(slv : unsigned) return natural;
     function find_first_high_bit(slv : signed) return natural;
+
+    function is_pow_of_2(n : positive) return boolean;
     
 end package CommonUtility;
 
@@ -256,5 +258,9 @@ package body CommonUtility is
         end if;
     end function;
 
+    function is_pow_of_2(n : positive) return boolean is
+    begin
+        return (to_unsigned(n, clog2(n)) and (to_unsigned(n, clog2(n)) - 1)) = 0;
+    end function;
     
 end package body CommonUtility;

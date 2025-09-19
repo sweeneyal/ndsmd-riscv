@@ -83,6 +83,24 @@ architecture rtl of MemoryUnit is
     signal dbg_prev_misaligned : std_logic := '0';
 begin
     
+    -- To implement caches, we need to add the SimpleCache here. Add a configurable
+    -- setting here to determine if SimpleCache gets instantiated.
+
+    -- After adding SimpleCache, add a translator level to translate the i_decoded
+    -- and related signals to the BRAM style read. These will either get passed through
+    -- to the AXI state machine below, OR will go into the SimpleCache to do a cache
+    -- lookup.
+
+    -- If the cache lookup passes, a hit signal will be asserted for later integration 
+    -- into performance counters. If the cache lookup fails, or autofails in the case of
+    -- the passthrough, then the AXI state machine performs the read/write as expected.
+
+    -- In addition to the cache, since this is likely integrated into some embedded system
+    -- where certain memory mapped peripherals are uncacheable due to their volatility,
+    -- we need to either add some list of uncacheable masks or make a programmable set of
+    -- registers that the cache has access to in order to eliminate attempts to cache
+    -- uncacheable addresses.
+
     StateMachine: process(i_clk)
         variable lsb : natural range 0 to cCachelineSize_B - 1 := 0;
         variable misaligned : std_logic := '0';
