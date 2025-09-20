@@ -10,7 +10,10 @@ entity CacheDirectMapped is
     generic (
         cAddressWidth_b    : positive := 32;
         cCachelineSize_B   : positive := 16;
-        cCacheSize_entries : positive := 1024
+        cCacheSize_entries : positive := 1024;
+        cNumCacheMasks     : positive := 4;
+        cCacheMasks        : std_logic_matrix_t
+            (0 to cNumCacheMasks - 1)(cAddressWidth_b - 1 downto 0)
     );
     port (
         i_clk    : in std_logic;
@@ -55,6 +58,7 @@ architecture rtl of CacheDirectMapped is
     signal is_read          : std_logic := '0';
     signal is_write         : std_logic := '0';
     signal is_hit           : std_logic := '0';
+    signal is_cacheable     : std_logic := '0';
     signal read_hit         : std_logic := '0';
     signal read_miss        : std_logic := '0';
     signal write_hit        : std_logic := '0';
@@ -137,6 +141,16 @@ begin
     metadata   <= slv_to_metadata(meta_rdata);
     meta_wdata <= metadata_to_slv(metadata_w);
 
+    MaskChecking: process(i_cache_addr)
+        variable v : std_logic := '0';
+    begin
+        v := '0';
+        for ii in 0 to cNumCacheMasks - 1 loop
+            v := v or bool2bit((cCacheMasks(ii) or i_cache_addr) = cCacheMasks(ii));
+        end loop;
+        is_cacheable <= v;
+    end process MaskChecking;
+
     is_read <= bool2bit(
         -- we're accessing the bram
         (en_reg = '1') and 
@@ -149,7 +163,7 @@ begin
         -- and writing something
         (any(wen_reg) = '1'));
 
-    is_hit <= bool2bit(
+    is_hit <= is_cacheable and bool2bit(
         -- and the data is valid
         (metadata.valid = '1') and
         -- and the address is the same 

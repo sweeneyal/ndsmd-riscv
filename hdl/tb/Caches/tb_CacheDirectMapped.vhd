@@ -32,6 +32,9 @@ architecture tb of tb_CacheDirectMapped is
     constant cAddressWidth_b    : positive := 32;
     constant cCachelineSize_B   : positive := 16;
     constant cCacheSize_entries : positive := 1024; 
+    constant cNumCacheMasks     : positive := 1;
+    constant cCacheMasks        : std_logic_matrix_t
+        (0 to cNumCacheMasks - 1)(cAddressWidth_b - 1 downto 0) := (0 => x"0000FFFF");
 
     type access_port_t is record
         addr  : std_logic_vector(cAddressWidth_b - 1 downto 0);
@@ -57,7 +60,9 @@ begin
     generic map (
         cAddressWidth_b    => cAddressWidth_b,
         cCachelineSize_B   => cCachelineSize_B,
-        cCacheSize_entries => cCacheSize_entries
+        cCacheSize_entries => cCacheSize_entries,
+        cNumCacheMasks     => cNumCacheMasks,
+        cCacheMasks        => cCacheMasks
     ) port map (
         i_clk    => clk, 
         i_resetn => resetn, 
@@ -278,6 +283,8 @@ begin
                         wait for 100 ps;
                     end if;
                 end loop;
+            elsif run("t_cache_mask_automiss_testing") then
+                check(false);
             end if;
         end loop;
     
