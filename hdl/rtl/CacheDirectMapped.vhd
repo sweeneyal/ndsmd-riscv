@@ -68,8 +68,9 @@ architecture rtl of CacheDirectMapped is
     signal state : state_t := RESET;
 
     type cache_status_t is record
-        is_hit   : std_logic;
-        is_write : std_logic;
+        is_hit       : std_logic;
+        is_write     : std_logic;
+        is_cacheable : std_logic;
     end record cache_status_t;
 
     signal status : cache_status_t;
@@ -79,6 +80,8 @@ architecture rtl of CacheDirectMapped is
     signal cacheline_addr_reg : std_logic_vector(cCacheAddrWidth_b - 1 downto 0) := (others => '0');
     signal upper_addr_reg     : std_logic_vector(cUpperAddrWidth_b - 1 downto 0) := (others => '0');
     signal cache_wdata_reg    : std_logic_vector(8 * cCachelineSize_B - 1 downto 0) := (others => '0');
+
+    signal write_valid : std_logic := '0';
 begin
     
     assert is_pow_of_2(cCachelineSize_B) and is_pow_of_2(cCacheSize_entries) 
@@ -111,8 +114,8 @@ begin
         o_rdataa => cache_rdata,
 
         i_addrb  => cacheline_addr_b,
-        i_enb    => valid,
-        i_wenb   => valid,
+        i_enb    => write_valid,
+        i_wenb   => write_valid,
         i_wdatab => rdata,
         o_rdatab => open
     );
@@ -132,8 +135,8 @@ begin
         o_rdataa => meta_rdata,
 
         i_addrb  => cacheline_addr_b,
-        i_enb    => valid,
-        i_wenb   => valid,
+        i_enb    => write_valid,
+        i_wenb   => write_valid,
         i_wdatab => meta_wdata,
         o_rdatab => open
     );
@@ -181,6 +184,7 @@ begin
     -- read hits take 1 cc, write hits take 2 cc because we have to write back to the cache
     -- misses take the penalty of the read or write side.
     o_cache_valid <= valid or read_hit;
+    write_valid   <= valid and status.is_cacheable;
     -- This seems like a bad idea in terms of clocking.
     DataMux: process(rdata, valid, cache_rdata)
     begin
@@ -202,10 +206,10 @@ begin
                 cache_wdata_reg    <= (others => '0');
 
                 -- Preserve the status so we know our state we need to transition to
-                status.is_write <= '0';
-                status.is_hit   <= '0';
-                valid           <= '0';
-
+                status.is_write     <= '0';
+                status.is_hit       <= '0';
+                status.is_cacheable <= '0';
+                valid               <= '0';
             else
                 case state is
                     when RESET =>
@@ -225,8 +229,9 @@ begin
                         cache_wdata_reg    <= i_cache_wdata;
 
                         -- Preserve the status so we know our state we need to transition to
-                        status.is_write <= is_write;
-                        status.is_hit   <= is_hit;
+                        status.is_write     <= is_write;
+                        status.is_hit       <= is_hit;
+                        status.is_cacheable <= is_cacheable;
                         
                         valid <= '0';
 
