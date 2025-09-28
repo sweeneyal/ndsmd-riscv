@@ -77,7 +77,7 @@ package InstructionUtility is
     -- Firstly, we need to indicate what functional unit is required for the operation. 
     -- the ALU is the integer arithmatic logic unit, and the MEXT is the M-Extension functional
     -- unit that adds integer multiplication, division, and remainder operations.
-    type functional_unit_t is (ALU, MEXT);
+    type functional_unit_t is (ALU, MEXT, FPU);
 
     -- For each functional unit, there are a set of possible operations that can occur.
     -- The ALU operations are standard RISC-V instructions with the operand types abstracted,
@@ -89,6 +89,8 @@ package InstructionUtility is
         -- MEXT operations
         MULTIPLY, MULTIPLY_UPPER, MULTIPLY_UPPER_SU, MULTIPLY_UPPER_UNS,
         DIVIDE, DIVIDE_UNS, REMAINDER, REMAINDER_UNS,
+        -- FPU operations
+        FP_ADD, FP_SUB,
         -- Default, null operation
         NULL_OP
     );
@@ -111,6 +113,9 @@ package InstructionUtility is
     -- CSR operations
     type csr_operation_t is (NULL_OP, ECALL, EBREAK, MRET, WFI, CSRROP);
     type csr_access_t is (NULL_OP, CSRRW, CSRRS, CSRRC);
+
+    -- FPU Format specifiers
+    type fp_format_t is (SINGLE_PRECISION, DOUBLE_PRECISION);
 
     -- The destination of the instruction is either a register, memory, or it is a branch
     -- instruction where there is no destination.
