@@ -90,7 +90,7 @@ package InstructionUtility is
         MULTIPLY, MULTIPLY_UPPER, MULTIPLY_UPPER_SU, MULTIPLY_UPPER_UNS,
         DIVIDE, DIVIDE_UNS, REMAINDER, REMAINDER_UNS,
         -- FPU operations
-        FP_ADD, FP_SUB,
+        FP_ADD, FP_SUB, FP_MUL,
         -- Default, null operation
         NULL_OP
     );

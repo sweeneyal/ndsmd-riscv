@@ -45,7 +45,10 @@ begin
                 fmt   <= SINGLE_PRECISION;
                 func  <= NULL_OP;
                 state <= IDLE;
+                o_valid <= '0';
             else
+                o_valid <= '0';
+                
                 case state is
                     when IDLE =>
                         if (i_valid = '1' and (i_func = FP_ADD or i_func = FP_SUB)) then
