@@ -13,11 +13,11 @@ library ndsmd_riscv;
     use ndsmd_riscv.CommonUtility.all;
     use ndsmd_riscv.InstructionUtility.all;
 
-entity tb_DoubleAdder is
+entity tb_DoubleDivider is
     generic (runner_cfg : string);
-end entity tb_DoubleAdder;
+end entity tb_DoubleDivider;
 
-architecture tb of tb_DoubleAdder is
+architecture tb of tb_DoubleDivider is
     -- https://weitz.de/ieee/
     constant cPeriod : time := 10 ns;
     signal clk      : std_logic := '0';
@@ -33,7 +33,7 @@ begin
     
     CreateClock(clk=>clk, period=>cPeriod);
 
-    eDut : entity ndsmd_riscv.DoubleAdder
+    eDut : entity ndsmd_riscv.DoubleDivider
     port map (
         i_clk    => clk,
         i_resetn => resetn,
@@ -54,7 +54,7 @@ begin
         test_runner_setup(runner, runner_cfg);
   
         while test_suite loop
-            if run("t_adder_demonstration") then
+            if run("t_divider_demonstration") then
                 info("Running basic demonstration.");
                 resetn <= '0';
                 wait until rising_edge(clk);
@@ -66,7 +66,7 @@ begin
                 opA     <= x"3FF23D70A3D70A3D";
                 opB     <= x"BFF428F5C28F5C29";
                 valid_i <= '1';
-                func    <= FP_ADD;
+                func    <= FP_DIV;
                 fmt     <= DOUBLE_PRECISION;
 
                 wait until rising_edge(clk);
@@ -74,7 +74,8 @@ begin
                 valid_i <= '0';
 
                 wait until valid_o = '1';
-                check(res = x"BFBEB851EB851EC0");
+                wait for 100 ps;
+                check(res = x"BFECF3CF3CF3CF3C");
             elsif run("t_single_precision_demo") then
                 check(false);
             end if;

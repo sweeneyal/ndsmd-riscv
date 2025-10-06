@@ -18,6 +18,7 @@ entity tb_DoubleMultiplier is
 end entity tb_DoubleMultiplier;
 
 architecture tb of tb_DoubleMultiplier is
+    -- https://weitz.de/ieee/
     constant cPeriod : time := 10 ns;
     signal clk      : std_logic := '0';
     signal resetn   : std_logic := '0';

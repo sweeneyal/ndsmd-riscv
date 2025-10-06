@@ -7,7 +7,7 @@ library ndsmd_riscv;
     use ndsmd_riscv.InstructionUtility.all;
     use ndsmd_riscv.FpUtility.all;
 
-entity DoubleMultiplier is
+entity DoubleDivider is
     port (
         i_clk : in std_logic;
         i_resetn : in std_logic;
@@ -21,43 +21,44 @@ entity DoubleMultiplier is
         o_res   : out std_logic_vector(63 downto 0);
         o_valid : out std_logic
     );
-end entity DoubleMultiplier;
+end entity DoubleDivider;
 
-architecture rtl of DoubleMultiplier is
+architecture rtl of DoubleDivider is
     signal opA          : double_precision_t;
     signal opB          : double_precision_t;
     signal fmt          : fp_format_t;
     signal func         : operation_t;
-    signal mul_valid    : std_logic := '0';
-    signal mul_valid_s0 : std_logic := '0';
+    signal div_valid    : std_logic := '0';
     signal valid        : std_logic := '0';
-    signal fracA        : unsigned(52 downto 0) := (others => '0');
-    signal fracB        : unsigned(52 downto 0) := (others => '0');
-    signal product      : unsigned(105 downto 0) := (others => '0');
-    signal product_s0   : unsigned(105 downto 0) := (others => '0');
+    signal fracA        : std_logic_vector(53 downto 0) := (others => '0');
+    signal fracB        : std_logic_vector(53 downto 0) := (others => '0');
+    signal div          : std_logic_vector(53 downto 0) := (others => '0');
 
-    type state_t is (IDLE, PERFORM_MULTIPLICATION, WAIT_FOR_MULT_DONE, DONE);
+    type state_t is (IDLE, PERFORM_DIVISION, WAIT_FOR_DIV_DONE, DONE);
     signal state : state_t := IDLE;
 begin
     
-    Multiplier: process(i_clk)
-    begin
-        if rising_edge(i_clk) then
-            if (mul_valid = '1') then
-                product_s0 <= fracA * fracB;
-            end if;
-            mul_valid_s0 <= mul_valid;
-
-            if (mul_valid_s0 = '1') then
-                product <= product_s0;
-            end if;
-            valid <= mul_valid_s0;
-        end if;
-    end process Multiplier;
+    eDivider : entity ndsmd_riscv.DivisionUnit
+    generic map (
+        cDataWidth_b => 54,
+        cIsIntegerDivision => false
+    ) port map (
+        i_clk    => i_clk,
+        i_resetn => i_resetn,
+        i_en     => div_valid,
+        i_signed => '0',
+        i_num    => fracA,
+        i_denom  => fracB,
+        o_div    => div,
+        o_rem    => open,
+        o_error  => open,
+        o_valid  => valid
+    );
 
     StateMachine: process(i_clk)
-        variable shift        : unsigned(10 downto 0) := (others => '0');
-        variable frac         : unsigned(105 downto 0) := (others => '0');
+        variable exponent : unsigned(10 downto 0) := (others => '0');
+        variable shift    : integer range -1 to 1 := 0;
+        variable frac     : unsigned(53 downto 0) := (others => '0');
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
@@ -72,7 +73,7 @@ begin
 
                 case state is
                     when IDLE =>
-                        if (i_valid = '1' and (i_func = FP_MUL)) then
+                        if (i_valid = '1' and (i_func = FP_DIV)) then
                             fmt  <= i_fmt;
                             func <= i_func;
                             if (i_fmt = SINGLE_PRECISION) then
@@ -83,41 +84,53 @@ begin
                                 opB <= to_double_precision(i_opB);
                             end if;
 
-                            state <= PERFORM_MULTIPLICATION;
+                            state <= PERFORM_DIVISION;
                         end if;
 
-                    when PERFORM_MULTIPLICATION =>
+                    when PERFORM_DIVISION =>
                         if (opA.signb = opB.signb) then
                             opA.signb <= '0';
                         else
                             opA.signb <= '1';
                         end if;
 
-                        opA.exponent <= (opA.exponent - 1023) + (opB.exponent - 1023) + 1023;
+                        if (opA.fraction < opB.fraction) then
+                            opA.exponent <= (opA.exponent - 1023) - (opB.exponent - 1023) + 1023 - 1;
+                        else
+                            opA.exponent <= (opA.exponent - 1023) - (opB.exponent - 1023) + 1023;
+                        end if;
 
-                        fracA     <= opA.implicit & opA.fraction;
-                        fracB     <= opB.implicit & opB.fraction;
-                        mul_valid <= '1';
 
-                        state <= WAIT_FOR_MULT_DONE;
+                        fracA     <= std_logic_vector(opA.implicit & opA.fraction & '0');
+                        fracB     <= std_logic_vector(opB.implicit & opB.fraction & '0');
+                        div_valid <= '1';
 
-                    when WAIT_FOR_MULT_DONE =>
-                        mul_valid <= '0';
+                        state <= WAIT_FOR_DIV_DONE;
+
+                    when WAIT_FOR_DIV_DONE =>
+                        -- the input range is ~1.0000 to ~1.9999, so we will 
+                        -- see results anywhere from ~0.5000 to ~1.9999 
+                        div_valid <= '0';
                         if (valid = '1') then
-                            shift        := to_unsigned(find_first_high_bit(product(105 downto 104)), 11);
-                            frac         := shift_right(product, to_integer(shift));
+                            shift := find_first_high_bit(div(53 downto 52)) - 1;
+                            if (shift < 0) then
+                                frac := shift_left(unsigned(div), 1);
+                                opA.exponent <= opA.exponent - 1;
+                            else
+                                frac := unsigned(div);
+                            end if;
                             -- This may not be correct rounding. Figure out how floating point
                             -- rounding actually works.
-                            opA.fraction <= frac(103 downto 52) + frac(51);
+                            opA.fraction <= frac(52 downto 1) + frac(0);
                             state        <= DONE;
                         end if;
 
                     when DONE =>
                         if (fmt = SINGLE_PRECISION) then
-                            shift := opA.exponent - 1023 + 127;
+                            exponent := opA.exponent - 1023 + 127;
                             o_res <= cNegativeQuietNaN_float & 
                                 opA.signb & 
-                                std_logic_vector(shift(7 downto 0)) & 
+                                std_logic_vector(exponent(7 downto 0)) & 
                                 std_logic_vector(opA.fraction(51 downto 29));
                         elsif (fmt = DOUBLE_PRECISION) then
                             o_res <= opA.signb & 

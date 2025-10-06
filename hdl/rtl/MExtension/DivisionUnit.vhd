@@ -6,30 +6,34 @@ library ndsmd_riscv;
     use ndsmd_riscv.CommonUtility.all;
 
 entity DivisionUnit is
+    generic (
+        cDataWidth_b       : positive := 32;
+        cIsIntegerDivision : boolean := true
+    );
     port (
         i_clk    : in std_logic;
         i_resetn : in std_logic;
         i_en     : in std_logic;
         i_signed : in std_logic;
-        i_num    : in std_logic_vector(31 downto 0);
-        i_denom  : in std_logic_vector(31 downto 0);
-        o_div    : out std_logic_vector(31 downto 0);
-        o_rem    : out std_logic_vector(31 downto 0);
+        i_num    : in std_logic_vector(cDataWidth_b - 1 downto 0);
+        i_denom  : in std_logic_vector(cDataWidth_b - 1 downto 0);
+        o_div    : out std_logic_vector(cDataWidth_b - 1 downto 0);
+        o_rem    : out std_logic_vector(cDataWidth_b - 1 downto 0);
         o_error  : out std_logic;
         o_valid  : out std_logic
     );
 end entity DivisionUnit;
 
 architecture rtl of DivisionUnit is
-    constant cConstOne : unsigned(63 downto 0) := x"0000000100000000";
-    constant cConstTwo : unsigned(63 downto 0) := x"0000000200000000";
+    constant cConstTwo : unsigned(2 * cDataWidth_b - 1 downto 0) := to_unsigned(2, cDataWidth_b) & (cDataWidth_b - 1 downto 0 => '0');
+    constant cNumIterates : positive := clog2(cDataWidth_b) - 1;
 
-    signal num_product    : unsigned(127 downto 0) := (others => '0');
-    signal den_product    : unsigned(127 downto 0) := (others => '0');
-    signal num_product_s0 : unsigned(127 downto 0) := (others => '0');
-    signal den_product_s0 : unsigned(127 downto 0) := (others => '0');
-    signal num_product_s1 : unsigned(127 downto 0) := (others => '0');
-    signal den_product_s1 : unsigned(127 downto 0) := (others => '0');
+    signal num_product    : unsigned(4 * cDataWidth_b - 1 downto 0) := (others => '0');
+    signal den_product    : unsigned(4 * cDataWidth_b - 1 downto 0) := (others => '0');
+    signal num_product_s0 : unsigned(4 * cDataWidth_b - 1 downto 0) := (others => '0');
+    signal den_product_s0 : unsigned(4 * cDataWidth_b - 1 downto 0) := (others => '0');
+    signal num_product_s1 : unsigned(4 * cDataWidth_b - 1 downto 0) := (others => '0');
+    signal den_product_s1 : unsigned(4 * cDataWidth_b - 1 downto 0) := (others => '0');
 
     signal valid       : std_logic := '0';
     signal valid_s0    : std_logic := '0';
@@ -39,15 +43,15 @@ architecture rtl of DivisionUnit is
     type state_t is (IDLE, EXTEND, STAGE0, STAGE1, POST_PROCESS, DONE);
     type gdu_engine_t is record
         state  : state_t;
-        num    : unsigned(63 downto 0);
+        num    : unsigned(2 * cDataWidth_b - 1 downto 0);
         snum   : std_logic;
-        denom  : unsigned(63 downto 0);
+        denom  : unsigned(2 * cDataWidth_b - 1 downto 0);
         sden   : std_logic;
-        cnum   : unsigned(31 downto 0);
-        cdenom : unsigned(31 downto 0);
-        remdr  : unsigned(31 downto 0);
-        fval   : unsigned(63 downto 0);
-        iter   : natural range 0 to 4;
+        cnum   : unsigned(cDataWidth_b - 1 downto 0);
+        cdenom : unsigned(cDataWidth_b - 1 downto 0);
+        remdr  : unsigned(cDataWidth_b - 1 downto 0);
+        fval   : unsigned(2 * cDataWidth_b - 1 downto 0);
+        iter   : natural range 0 to cNumIterates;
     end record gdu_engine_t;
     signal gdu_engine : gdu_engine_t;
 
@@ -127,13 +131,13 @@ begin
     
                             -- If we're provided signed numbers, convert them to their unsigned numbers.
                             if (i_signed = '1' and i_num(31) = '1') then
-                                gdu_engine.num  <= unsigned(-signed(i_num)) & x"00000000";
+                                gdu_engine.num  <= unsigned(-signed(i_num)) & (cDataWidth_b - 1 downto 0 => '0');
                                 gdu_engine.snum <= '1';
     
                                 -- Preserve original numerator for remainder calculation.
                                 gdu_engine.cnum <= unsigned(-signed(i_num));
                             else
-                                gdu_engine.num  <= unsigned(i_num) & x"00000000";
+                                gdu_engine.num  <= unsigned(i_num) & (cDataWidth_b - 1 downto 0 => '0');
                                 gdu_engine.snum <= '0';
     
                                 -- Preserve original numerator for remainder calculation.
@@ -141,13 +145,13 @@ begin
                             end if;
         
                             if (i_signed = '1' and i_denom(31) = '1') then
-                                gdu_engine.denom <= unsigned(-signed(i_denom)) & x"00000000";
+                                gdu_engine.denom <= unsigned(-signed(i_denom)) & (cDataWidth_b - 1 downto 0 => '0');
                                 gdu_engine.sden  <= '1';
         
                                 -- Preserve original denominator for remainder calculation.
                                 gdu_engine.cdenom <= unsigned(-signed(i_denom));
                             else
-                                gdu_engine.denom <= unsigned(i_denom) & x"00000000";
+                                gdu_engine.denom <= unsigned(i_denom) & (cDataWidth_b - 1 downto 0 => '0');
                                 gdu_engine.sden  <= '0';
         
                                 -- Preserve original denominator for remainder calculation.
@@ -171,14 +175,14 @@ begin
     
                         -- Shift the numerator and denominator right to get them in the bound of 0 to 1.
                         gdu_engine.num <= shift_right(gdu_engine.num, 
-                                            find_first_high_bit(std_logic_vector(gdu_engine.denom(63 downto 32))));
+                                            find_first_high_bit(std_logic_vector(gdu_engine.denom(2 * cDataWidth_b - 1 downto cDataWidth_b))));
                         gdu_engine.denom <= shift_right(gdu_engine.denom, 
-                                            find_first_high_bit(std_logic_vector(gdu_engine.denom(63 downto 32))));
+                                            find_first_high_bit(std_logic_vector(gdu_engine.denom(2 * cDataWidth_b - 1 downto cDataWidth_b))));
     
                     when STAGE0 =>
                         -- If we're not at iter 4, calcuate a new fval number and use that to calculate a
                         -- new numerator and denominator.
-                        if (gdu_engine.iter < 4) then
+                        if (gdu_engine.iter < cNumIterates) then
                             valid <= '1';
     
                             gdu_engine.fval  <= cConstTwo - gdu_engine.denom;
@@ -187,7 +191,11 @@ begin
                         else
                             gdu_engine.state <= POST_PROCESS;
                             -- Do remainder calculation here.
-                            gdu_engine.remdr <= gdu_engine.cnum - shape(gdu_engine.num(63 downto 32) * gdu_engine.cdenom, 31, 0);
+                            gdu_engine.remdr <= gdu_engine.cnum - 
+                                shape(
+                                    gdu_engine.num(2 * cDataWidth_b - 1 downto cDataWidth_b) * gdu_engine.cdenom, 
+                                    cDataWidth_b - 1, 
+                                    0);
                         end if;
                         
                     when STAGE1 =>
@@ -195,8 +203,8 @@ begin
     
                         if (stage1_done = '1') then
                             gdu_engine.state <= STAGE0;
-                            gdu_engine.num   <= num_product(95 downto 32);
-                            gdu_engine.denom <= den_product(95 downto 32);
+                            gdu_engine.num   <= num_product(3 * cDataWidth_b - 1 downto cDataWidth_b);
+                            gdu_engine.denom <= den_product(3 * cDataWidth_b - 1 downto cDataWidth_b);
                         end if;
     
                     when POST_PROCESS =>
@@ -223,7 +231,16 @@ begin
     end process DivisionAlgorithm;
 
     o_rem   <= std_logic_vector(gdu_engine.remdr);
-    o_div   <= std_logic_vector(gdu_engine.num(63 downto 32));
+
+    IsIntegerDivision: process(gdu_engine)
+    begin
+        if cIsIntegerDivision then
+            o_div <= std_logic_vector(gdu_engine.num(2 * cDataWidth_b - 1 downto cDataWidth_b));
+        else
+            o_div <= std_logic_vector(gdu_engine.num(cDataWidth_b - 1 downto 0));
+        end if;
+    end process IsIntegerDivision;
+
     o_valid <= bool2bit(gdu_engine.state = DONE);
     
     
