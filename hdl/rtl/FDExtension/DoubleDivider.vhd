@@ -127,6 +127,8 @@ begin
 
                     when APPLY_ROUNDING =>
                         -- if rm = RNE
+                        -- Rounding done according to guard-round-sticky
+                        -- https://drilian.com/posts/2023.01.10-floating-point-numbers-and-rounding/
                         opA.fraction <= opA.fraction + (opA.rounding(2) and (opA.rounding(1) or opA.rounding(0)));
                         state <= DONE;
 
