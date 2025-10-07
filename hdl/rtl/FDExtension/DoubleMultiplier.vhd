@@ -36,7 +36,7 @@ architecture rtl of DoubleMultiplier is
     signal product      : unsigned(105 downto 0) := (others => '0');
     signal product_s0   : unsigned(105 downto 0) := (others => '0');
 
-    type state_t is (IDLE, PERFORM_MULTIPLICATION, WAIT_FOR_MULT_DONE, DONE);
+    type state_t is (IDLE, PERFORM_MULTIPLICATION, WAIT_FOR_MULT_DONE, APPLY_ROUNDING, DONE);
     signal state : state_t := IDLE;
 begin
     
@@ -57,7 +57,7 @@ begin
 
     StateMachine: process(i_clk)
         variable shift        : unsigned(10 downto 0) := (others => '0');
-        variable frac         : unsigned(105 downto 0) := (others => '0');
+        variable frac         : unsigned(55 downto 0) := (others => '0');
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
@@ -105,12 +105,20 @@ begin
                         mul_valid <= '0';
                         if (valid = '1') then
                             shift        := to_unsigned(find_first_high_bit(product(105 downto 104)), 11);
-                            frac         := shift_right(product, to_integer(shift));
+                            frac         := shift_right_mantissa(product(104 downto 49), to_integer(shift));
                             -- This may not be correct rounding. Figure out how floating point
                             -- rounding actually works.
-                            opA.fraction <= frac(103 downto 52) + frac(51);
-                            state        <= DONE;
+                            opA.fraction <= frac(54 downto 3);
+                            opA.rounding <= frac(2 downto 0);
+                            state        <= APPLY_ROUNDING;
                         end if;
+
+                    when APPLY_ROUNDING =>
+                        -- if rm = RNE
+                        -- Rounding done according to guard-round-sticky
+                        -- https://drilian.com/posts/2023.01.10-floating-point-numbers-and-rounding/
+                        opA.fraction <= opA.fraction + (opA.rounding(2) and (opA.rounding(1) or opA.rounding(0)));
+                        state <= DONE;
 
                     when DONE =>
                         if (fmt = SINGLE_PRECISION) then

@@ -29,14 +29,14 @@ architecture rtl of DoubleAdder is
     signal fmt  : fp_format_t;
     signal func : operation_t;
 
-    type state_t is (IDLE, SHIFT_LOWEST, ADD_FRACTIONS, POST_PROCESS, DONE);
+    type state_t is (IDLE, SHIFT_LOWEST, ADD_FRACTIONS, POST_PROCESS, APPLY_ROUNDING, DONE);
     signal state : state_t := IDLE;
 begin
 
     StateMachine: process(i_clk)
         variable shift        : unsigned(10 downto 0) := (others => '0');
-        variable frac_shifted : unsigned(52 downto 0) := (others => '0');
-        variable frac         : signed(53 downto 0) := (others => '0');
+        variable frac_shifted : unsigned(55 downto 0) := (others => '0');
+        variable frac         : signed(56 downto 0) := (others => '0');
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
@@ -72,44 +72,41 @@ begin
 
                         if (opA.exponent > opB.exponent) then
                             shift := opA.exponent - opB.exponent;
-                            frac_shifted := shift_right(opB.implicit & opB.fraction, to_integer(shift));
-                            opB.fraction <= frac_shifted(51 downto 0);
+                            frac_shifted := shift_right_mantissa(opB.implicit & opB.fraction & opB.rounding, to_integer(shift));
+                            opB.implicit <= frac_shifted(55);
+                            opB.fraction <= frac_shifted(54 downto 3);
+                            opB.rounding <= frac_shifted(2 downto 0);
                             opB.exponent <= opA.exponent;
-
-                            if (shift > 0) then
-                                opB.implicit <= '0';
-                            end if;
                         else
                             shift := opB.exponent - opA.exponent;
-                            frac_shifted := shift_right(opA.implicit & opA.fraction, to_integer(shift));
-                            opA.fraction <= frac_shifted(51 downto 0);
+                            frac_shifted := shift_right_mantissa(opA.implicit & opA.fraction & opA.rounding, to_integer(shift));
+                            report to_hstring(std_logic_vector(frac_shifted));
+                            opA.implicit <= frac_shifted(55);
+                            opA.fraction <= frac_shifted(54 downto 3);
+                            opA.rounding <= frac_shifted(2 downto 0);
                             opA.exponent <= opB.exponent;
-
-                            if (shift > 0) then
-                                opA.implicit <= '0';
-                            end if;
                         end if;
 
                         state <= ADD_FRACTIONS;
 
                     when ADD_FRACTIONS =>
                         if (opA.signb = '1') then
-                            frac := -signed('0' & opA.implicit & opA.fraction);
+                            frac := -signed('0' & opA.implicit & opA.fraction & opA.rounding);
                         else
-                            frac := signed('0' & opA.implicit & opA.fraction);
+                            frac := signed('0' & opA.implicit & opA.fraction & opA.rounding);
                         end if;
 
                         if (func = FP_ADD) then
                             if (opB.signb = '1') then
-                                frac := frac - signed('0' & opB.implicit & opB.fraction);
+                                frac := frac - signed('0' & opB.implicit & opB.fraction & opB.rounding);
                             else
-                                frac := frac + signed('0' & opB.implicit & opB.fraction);
+                                frac := frac + signed('0' & opB.implicit & opB.fraction & opB.rounding);
                             end if;
                         elsif (func = FP_SUB) then
                             if (opB.signb = '1') then
-                                frac := frac + signed('0' & opB.implicit & opB.fraction);
+                                frac := frac + signed('0' & opB.implicit & opB.fraction & opB.rounding);
                             else
-                                frac := frac - signed('0' & opB.implicit & opB.fraction);
+                                frac := frac - signed('0' & opB.implicit & opB.fraction & opB.rounding);
                             end if;
                         end if;
 
@@ -117,19 +114,32 @@ begin
 
                     when POST_PROCESS =>
                         -- If the sign bit is '1', meaning negative:
-                        opA.signb <= frac(53);
-                        if (frac(53) = '1') then
+                        opA.signb <= frac(56);
+                        if (frac(56) = '1') then
                             -- Negate the fraction to make it positive again
                             frac := -(frac);
-                            -- if the implicit one bit is '0', we need to shift the exponent 
-                            -- to get the implicit one back.
-                            if (frac(52) = '0') then
-                                shift := to_unsigned(52 - find_first_high_bit(frac(51 downto 0)), 11);
-                                opA.exponent <= opA.exponent - shift;
-                            end if;
-                            opA.fraction <= shift_left(unsigned(frac(51 downto 0)), to_integer(shift));
                         end if;
+                        
+                        -- if the implicit one bit is '0', we need to shift the exponent 
+                        -- to get the implicit one back.
+                        report to_hstring(std_logic_vector(frac));
+                        if (frac(55) = '0') then
+                            shift := to_unsigned(55 - find_first_high_bit(frac(54 downto 0)), 11);
+                            opA.exponent <= opA.exponent - shift;
+                            frac_shifted := shift_left_mantissa(unsigned(frac(55 downto 0)), to_integer(shift));
+                        end if;
+                        report to_hstring(std_logic_vector(frac_shifted));
+                        opA.implicit <= frac_shifted(55);
+                        opA.fraction <= frac_shifted(54 downto 3);
+                        opA.rounding <= frac_shifted(2 downto 0);
 
+                        state <= APPLY_ROUNDING;
+
+                    when APPLY_ROUNDING =>
+                        -- if rm = RNE
+                        -- Rounding done according to guard-round-sticky
+                        -- https://drilian.com/posts/2023.01.10-floating-point-numbers-and-rounding/
+                        opA.fraction <= opA.fraction + (opA.rounding(2) and (opA.rounding(1) or opA.rounding(0)));
                         state <= DONE;
 
                     when DONE =>
@@ -139,7 +149,7 @@ begin
                                 opA.signb & 
                                 std_logic_vector(shift(7 downto 0)) & 
                                 std_logic_vector(opA.fraction(51 downto 29));
-                        elsif (fmt = DOUBLE_PRECISION) then
+                        else
                             o_res <= opA.signb & 
                                 std_logic_vector(opA.exponent) & 
                                 std_logic_vector(opA.fraction);

@@ -30,17 +30,17 @@ architecture rtl of DoubleDivider is
     signal func         : operation_t;
     signal div_valid    : std_logic := '0';
     signal valid        : std_logic := '0';
-    signal fracA        : std_logic_vector(53 downto 0) := (others => '0');
-    signal fracB        : std_logic_vector(53 downto 0) := (others => '0');
-    signal div          : std_logic_vector(53 downto 0) := (others => '0');
+    signal fracA        : std_logic_vector(55 downto 0) := (others => '0');
+    signal fracB        : std_logic_vector(55 downto 0) := (others => '0');
+    signal div          : std_logic_vector(55 downto 0) := (others => '0');
 
-    type state_t is (IDLE, PERFORM_DIVISION, WAIT_FOR_DIV_DONE, DONE);
+    type state_t is (IDLE, PERFORM_DIVISION, WAIT_FOR_DIV_DONE, APPLY_ROUNDING, DONE);
     signal state : state_t := IDLE;
 begin
     
     eDivider : entity ndsmd_riscv.DivisionUnit
     generic map (
-        cDataWidth_b => 54,
+        cDataWidth_b => 56,
         cIsIntegerDivision => false
     ) port map (
         i_clk    => i_clk,
@@ -58,7 +58,7 @@ begin
     StateMachine: process(i_clk)
         variable exponent : unsigned(10 downto 0) := (others => '0');
         variable shift    : integer range -1 to 1 := 0;
-        variable frac     : unsigned(53 downto 0) := (others => '0');
+        variable frac     : unsigned(55 downto 0) := (others => '0');
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
@@ -101,8 +101,8 @@ begin
                         end if;
 
 
-                        fracA     <= std_logic_vector(opA.implicit & opA.fraction & '0');
-                        fracB     <= std_logic_vector(opB.implicit & opB.fraction & '0');
+                        fracA     <= std_logic_vector(opA.implicit & opA.fraction & opA.rounding);
+                        fracB     <= std_logic_vector(opB.implicit & opB.fraction & opB.rounding);
                         div_valid <= '1';
 
                         state <= WAIT_FOR_DIV_DONE;
@@ -112,18 +112,23 @@ begin
                         -- see results anywhere from ~0.5000 to ~1.9999 
                         div_valid <= '0';
                         if (valid = '1') then
-                            shift := find_first_high_bit(div(53 downto 52)) - 1;
+                            shift := find_first_high_bit(div(55 downto 54)) - 1;
                             if (shift < 0) then
-                                frac := shift_left(unsigned(div), 1);
+                                frac := shift_left_mantissa(unsigned(div), 1);
                                 opA.exponent <= opA.exponent - 1;
                             else
                                 frac := unsigned(div);
                             end if;
                             -- This may not be correct rounding. Figure out how floating point
                             -- rounding actually works.
-                            opA.fraction <= frac(52 downto 1) + frac(0);
-                            state        <= DONE;
+                            opA.fraction <= frac(54 downto 3);
+                            state        <= APPLY_ROUNDING;
                         end if;
+
+                    when APPLY_ROUNDING =>
+                        -- if rm = RNE
+                        opA.fraction <= opA.fraction + (opA.rounding(2) and (opA.rounding(1) or opA.rounding(0)));
+                        state <= DONE;
 
                     when DONE =>
                         if (fmt = SINGLE_PRECISION) then
