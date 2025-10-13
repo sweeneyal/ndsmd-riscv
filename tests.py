@@ -19,11 +19,6 @@ vu.add_osvvm()
 # or
 # vu.add_verilog_builtins()
 
-universal = vu.add_library("universal")
-files = get_vhdl_files('./libraries/universal/hdl/pkgs', recursive=True)
-for file in files:
-    universal.add_source_file(file)
-
 simtools = vu.add_library("simtools")
 files = get_vhdl_files('./libraries/simtools/hdl/pkgs', recursive=True)
 for file in files:

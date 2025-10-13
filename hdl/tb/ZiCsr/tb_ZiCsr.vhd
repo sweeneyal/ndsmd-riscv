@@ -72,6 +72,8 @@ begin
                                         jump_branch   => NOT_JUMP,
                                         condition     => NO_COND,
                                         new_pc        => (others => '0'),
+                                        fp_format      => NULL_FORMAT,
+                                        fp_qualifiers  => NULL_QUALIFIER,
                                         csr_operation => NULL_OP,
                                         csr_access    => CSRRW,
                                         destination   => REGISTERS
@@ -100,6 +102,8 @@ begin
                                         jump_branch   => NOT_JUMP,
                                         condition     => NO_COND,
                                         new_pc        => (others => '0'),
+                                        fp_format     => NULL_FORMAT,
+                                        fp_qualifiers => NULL_QUALIFIER,
                                         csr_operation => NULL_OP,
                                         csr_access    => CSRRW,
                                         destination   => REGISTERS
@@ -193,6 +197,8 @@ begin
                                         jump_branch   => NOT_JUMP,
                                         condition     => NO_COND,
                                         new_pc        => (others => '0'),
+                                        fp_format     => NULL_FORMAT,
+                                        fp_qualifiers => NULL_QUALIFIER,
                                         csr_operation => NULL_OP,
                                         csr_access    => CSRRW,
                                         destination   => REGISTERS
@@ -526,6 +532,8 @@ begin
                                         jump_branch   => NOT_JUMP,
                                         condition     => NO_COND,
                                         new_pc        => (others => '0'),
+                                        fp_format      => NULL_FORMAT,
+                                        fp_qualifiers  => NULL_QUALIFIER,
                                         csr_operation => NULL_OP,
                                         csr_access    => CSRRW,
                                         destination   => REGISTERS

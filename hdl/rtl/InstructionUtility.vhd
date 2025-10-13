@@ -90,15 +90,32 @@ package InstructionUtility is
         MULTIPLY, MULTIPLY_UPPER, MULTIPLY_UPPER_SU, MULTIPLY_UPPER_UNS,
         DIVIDE, DIVIDE_UNS, REMAINDER, REMAINDER_UNS,
         -- FPU operations
-        FP_ADD, FP_SUB, FP_MUL, FP_DIV,
+        FP_ADD, FP_SUB, FP_MUL, FP_DIV, FP_MADD, FP_MSUB, FP_NMSUB, FP_NMADD, 
+        FP_SQRT, FP_SGNJ, FP_MIN, FP_MAX, FP_CVT, FP_MV, 
+        FP_EQ, FP_LT, FP_LE, FP_CLASS,
         -- Default, null operation
         NULL_OP
+    );
+
+    -- FPU Format specifiers
+    type fp_format_t is (NULL_FORMAT, SINGLE_PRECISION, DOUBLE_PRECISION);
+
+    -- Qualifiers for deviating similar instructions, namely:
+    -- FCVT, FMV, FSGNJ/N/X
+    type fp_qualifier_t is (
+        SGNJN, SGNJX,
+        WORD_FROM_FP, FP_FROM_WORD, UWORD_FROM_FP, FP_FROM_UWORD,
+        MOVE_RD_FROM_FP_RS1, MOVE_FP_RD_FROM_RS1,
+        NULL_QUALIFIER
     );
 
     -- Memory operations are kept separate from ALU/MEXT, because the ALU is used to compute the 
     -- address of the memory operation, and the memory operation is completed in the mem access stage.
     type mem_operation_t is (NULL_OP, LOAD, STORE);
-    type mem_access_t is (BYTE_ACCESS, HALF_WORD_ACCESS, WORD_ACCESS, UBYTE_ACCESS, UHALF_WORD_ACCESS);
+    type mem_access_t is (
+        BYTE_ACCESS, HALF_WORD_ACCESS, WORD_ACCESS, UBYTE_ACCESS, UHALF_WORD_ACCESS,
+        FP_WORD_ACCESS, FP_DOUBLE_ACCESS
+    );
 
     -- Since we can either use a register operand, the program counter, or 
     -- another hardcoded zero for the first source, indicate the correct source.
@@ -113,9 +130,6 @@ package InstructionUtility is
     -- CSR operations
     type csr_operation_t is (NULL_OP, ECALL, EBREAK, MRET, WFI, CSRROP);
     type csr_access_t is (NULL_OP, CSRRW, CSRRS, CSRRC);
-
-    -- FPU Format specifiers
-    type fp_format_t is (SINGLE_PRECISION, DOUBLE_PRECISION);
 
     -- The destination of the instruction is either a register, memory, or it is a branch
     -- instruction where there is no destination.
@@ -142,6 +156,10 @@ package InstructionUtility is
         jump_branch : jump_type_t;
         condition   : condition_t;
         new_pc      : unsigned(31 downto 0);
+
+        -- floating point/double specific fields
+        fp_format     : fp_format_t;
+        fp_qualifiers : fp_qualifier_t;
 
         -- zicsr specific fields
         csr_operation : csr_operation_t;

@@ -203,6 +203,9 @@ begin
                                         end if;
 
                                     end if;
+
+                                when others =>
+                                    assert false report "Not implemented!!!" severity error;
                             
                             end case;
 
@@ -292,6 +295,12 @@ begin
                                         -- to however much can be stored in the outgoing bus.
                                         o_data_wdata(8 * (4 - (cCachelineSize_B - lsb)) - 1 downto 0) <= stored_data(31 downto 8 * (cCachelineSize_B - lsb));
                                         o_data_wstrb((4 - (cCachelineSize_B - lsb)) - 1 downto 0) <= (others => '1');
+
+                                    when others =>
+                                        -- We shouldn't be here! These are not implemented yet.
+                                        assert false 
+                                            report "MemoryUnit::StateMachine: Floating and double accesses are not implemented yet." 
+                                            severity failure;
                                 
                                 end case;
 
@@ -365,6 +374,12 @@ begin
                                         -- We can just grab all four bytes.
                                         o_res(31 downto 0) <= i_data_rdata(8 * (lsb + 4) - 1 downto 8 * lsb);
                                     end if;
+
+                                when others =>
+                                    -- We shouldn't be here! These are not implemented yet.
+                                    assert false 
+                                        report "MemoryUnit::StateMachine: Floating and double accesses are not implemented yet." 
+                                        severity failure;
                             
                             end case;
 
