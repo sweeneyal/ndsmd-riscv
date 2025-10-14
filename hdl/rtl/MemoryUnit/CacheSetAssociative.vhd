@@ -4,20 +4,23 @@ library ieee;
 
 library ndsmd_riscv;
     use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.CacheUtility.all;
 
 entity CacheSetAssociative is
     generic (
-        cAddrWidth_b       : positive := 32;
+        cAddressWidth_b    : positive := 32;
         cCachelineSize_B   : positive := 16;
         cCacheSize_entries : positive := 1024;
-        cCache_NumSets     : positive := 4
+        cCache_NumSets     : positive := 4;
+        cNumCacheMasks     : positive := 4;
+        cLruCounterWidth_b : positive := 4;
+        cCacheMasks        : std_logic_matrix_t
+            (0 to cNumCacheMasks - 1)(cAddressWidth_b - 1 downto 0)
     );
     port (
         i_clk    : in std_logic;
         i_resetn : in std_logic;
 
-        i_cache_addr  : in std_logic_vector(cAddrWidth_b - 1 downto 0);
+        i_cache_addr  : in std_logic_vector(cAddressWidth_b - 1 downto 0);
         i_cache_en    : in std_logic;
         i_cache_wen   : in std_logic_vector(cCachelineSize_B - 1 downto 0);
         i_cache_wdata : in std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
@@ -27,7 +30,7 @@ entity CacheSetAssociative is
         o_cache_hit  : out std_logic;
         o_cache_miss : out std_logic;
 
-        o_mem_addr  : out std_logic_vector(cAddrWidth_b - 1 downto 0);
+        o_mem_addr  : out std_logic_vector(cAddressWidth_b - 1 downto 0);
         o_mem_en    : out std_logic;
         o_mem_wen   : out std_logic_vector(cCachelineSize_B - 1 downto 0);
         o_mem_wdata : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
@@ -37,7 +40,37 @@ entity CacheSetAssociative is
 end entity CacheSetAssociative;
 
 architecture rtl of CacheSetAssociative is
-    
+    constant cCacheAddrWidth_b  : positive := clog2(cCacheSize_entries/cCache_NumSets);
+    constant cUpperAddrWidth_b  : positive := cAddressWidth_b - clog2(cCacheSize_entries/cCache_NumSets) - clog2(cCachelineSize_B);
+    constant cMetadataWidth_b   : positive := cUpperAddrWidth_b + 2 + cLruCounterWidth_b;
+
+    -- In this implementation, LRU works by incrementing the hit metadata while
+    -- decrementing the miss metadata, within the range of 0 to 2**cLruCounterWidth_b - 1.
+    -- This means that the set that is least recently used is the least incremented set,
+    -- and also- means that the LRU bits are stored as metadata in a BRAM, which is less expensive
+    -- than parallel registers.
+
+    type metadata_t is record
+        upper_address : std_logic_vector;
+        lru           : unsigned;
+        dirty         : std_logic;
+        valid         : std_logic;
+    end record metadata_t;
+
+    function slv_to_metadata(s : std_logic_vector) return metadata_t is
+        variable m : metadata_t(upper_address(s'length - 2 - cLruCounterWidth_b - 1 downto 0), lru(cLruCounterWidth_b - 1 downto 0));
+    begin
+        m.upper_address := s(s'length - 2 - cLruCounterWidth_b - 1 downto 0);
+        m.lru           := unsigned(s(s'length - 3 downto s'length - 2 - cLruCounterWidth_b));
+        m.dirty         := s(s'length - 2);
+        m.valid         := s(s'length - 1);
+        return m;
+    end function;
+
+    function metadata_to_slv(m : metadata_t) return std_logic_vector is
+    begin
+        return m.valid & m.dirty & std_logic_vector(m.lru) &  m.upper_address;
+    end function;
 begin
     
     -- assert is_pow_of_2(cCachelineSize_B) and is_pow_of_2(cCacheSize_entries) 

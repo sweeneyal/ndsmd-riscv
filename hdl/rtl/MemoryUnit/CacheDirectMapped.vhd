@@ -4,7 +4,6 @@ library ieee;
 
 library ndsmd_riscv;
     use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.CacheUtility.all;
 
 entity CacheDirectMapped is
     generic (
@@ -42,6 +41,26 @@ architecture rtl of CacheDirectMapped is
     constant cCacheAddrWidth_b : positive := clog2(cCacheSize_entries);
     constant cUpperAddrWidth_b : positive := cAddressWidth_b - clog2(cCacheSize_entries) - clog2(cCachelineSize_B);
     constant cMetadataWidth_b  : positive := cUpperAddrWidth_b + 2;
+
+    type metadata_t is record
+        upper_address : std_logic_vector;
+        dirty         : std_logic;
+        valid         : std_logic;
+    end record metadata_t;
+
+    function slv_to_metadata(s : std_logic_vector) return metadata_t is
+        variable m : metadata_t(upper_address(s'length - 3 downto 0));
+    begin
+        m.upper_address := s(s'length - 3 downto 0);
+        m.dirty         := s(s'length - 2);
+        m.valid         := s(s'length - 1);
+        return m;
+    end function;
+
+    function metadata_to_slv(m : metadata_t) return std_logic_vector is
+    begin
+        return m.valid & m.dirty & m.upper_address;
+    end function;
 
     signal cacheline_addr   : std_logic_vector(cCacheAddrWidth_b - 1 downto 0) := (others => '0');
     signal upper_memaddr    : std_logic_vector(cUpperAddrWidth_b - 1 downto 0) := (others => '0');

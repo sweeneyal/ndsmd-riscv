@@ -460,8 +460,17 @@ begin
     -- into AXI LITE transactions and then back into data for forwarding through the pipeline.
     eMemoryUnit : entity ndsmd_riscv.MemoryUnit
     generic map (
-        cAddressWidth_b => cMemoryUnit_AddressWidth_b,
-        cCachelineSize_B => cMemoryUnit_CachelineSize_B
+        cAddressWidth_b  => cMemoryUnit_AddressWidth_b,
+        cDataWidth_b     => 32,
+        cCachelineSize_B => cMemoryUnit_CachelineSize_B,
+
+        cGenerateCache     => true,
+        cCacheType         => "Direct",
+        cCacheSize_entries => 1024,
+        cCache_NumSets     => 1,
+        
+        cNumCacheMasks     => 1,
+        cCacheMasks        => (0 => x"0000FFFF")
     ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,
