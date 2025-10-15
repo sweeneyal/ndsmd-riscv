@@ -116,6 +116,7 @@ architecture rtl of Datapath is
     signal mext_res   : std_logic_vector(31 downto 0) := (others => '0');
     signal mext_valid : std_logic := '0';
 
+    signal jalr_pc : unsigned(31 downto 0) := (others => '0');
     signal pcwen : std_logic := '0';
     signal pcout : unsigned(31 downto 0) := (others => '0');
 
@@ -287,10 +288,12 @@ begin
     o_pcwen <= (pcwen and i_issued.valid) or irpt_valid;
     o_pc    <= pcout;
 
+    jalr_pc <= unsigned(opA) + unsigned(opB);
+
     -- Here we select the correct next PC based on the instruction that triggered the
     -- jump. If it was an interrupt, we then override whatever is going to the PC, which
     -- can be an existing jump or some other instruction.
-    JumpBranchHandling: process(i_issued, alu_out, slt_res, eq_res, irpt_pc, irpt_valid)
+    JumpBranchHandling: process(i_issued, alu_out, jalr_pc, slt_res, eq_res, irpt_pc, irpt_valid)
     begin
         alu_res <= alu_out;
         -- TODO: Preemptively handle mrets here, since mepc is already
@@ -320,11 +323,15 @@ begin
 
             when JALR =>
                 -- Because indirect jumps are a pain, we precompute the post-jump PC in the
-                -- control engine, and use the ALU to compute the target address.
+                -- control engine, and the target address is computed by an adder parallel to the
+                -- ALU. This should help with timing issues, because it comes from 
+                --    opA/opB -> adder -> mux (here) -> pcout, 
+                -- whereas before:
+                --    opA/opB -> adder (alu) -> mux (alu) -> mux (here) -> pcout
                 -- Every other option in this setup has the target address precomputed instead.
                 alu_res <= std_logic_vector(i_issued.instr.new_pc);
-                pcout    <= unsigned(alu_out);
-                pcwen <= '1';
+                pcout   <= jalr_pc;
+                pcwen   <= '1';
 
             when MRET =>
                 pcout <= irpt_mepc;
@@ -461,16 +468,16 @@ begin
     eMemoryUnit : entity ndsmd_riscv.MemoryUnit
     generic map (
         cAddressWidth_b  => cMemoryUnit_AddressWidth_b,
-        cDataWidth_b     => 32,
-        cCachelineSize_B => cMemoryUnit_CachelineSize_B,
+        --cDataWidth_b     => 32,
+        cCachelineSize_B => cMemoryUnit_CachelineSize_B
 
-        cGenerateCache     => true,
-        cCacheType         => "Direct",
-        cCacheSize_entries => 1024,
-        cCache_NumSets     => 1,
+        -- cGenerateCache     => true,
+        -- cCacheType         => "Direct",
+        -- cCacheSize_entries => 1024,
+        -- cCache_NumSets     => 1,
         
-        cNumCacheMasks     => 1,
-        cCacheMasks        => (0 => x"0000FFFF")
+        -- cNumCacheMasks     => 1,
+        -- cCacheMasks        => (0 => x"0000FFFF")
     ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,

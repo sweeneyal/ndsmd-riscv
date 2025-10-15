@@ -255,19 +255,28 @@ begin
                         valid <= '0';
 
                         if (write_miss = '1') then
-                            if (metadata.dirty = '1') then
+                            if (is_cacheable = '1') then
+                                if (metadata.dirty = '1') then
+                                    -- need to write memory, read memory, edit and writeback to cache while returning valid
+                                    state       <= REQUEST_MEM_WRITE;
+                                    o_mem_addr  <= metadata.upper_address & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                    o_mem_en    <= '1';
+                                    o_mem_wen   <= (others => '1');
+                                    o_mem_wdata <= cache_rdata;
+                                else
+                                    -- need to read memory, edit and writeback to cache while returning valid
+                                    state      <= REQUEST_MEM_READ;
+                                    o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                    o_mem_en   <= '1';
+                                    o_mem_wen  <= (others => '0');
+                                end if;
+                            else
                                 -- need to write memory, read memory, edit and writeback to cache while returning valid
                                 state       <= REQUEST_MEM_WRITE;
-                                o_mem_addr  <= metadata.upper_address & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                o_mem_addr  <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                 o_mem_en    <= '1';
-                                o_mem_wen   <= (others => '1');
-                                o_mem_wdata <= cache_rdata;
-                            else
-                                -- need to read memory, edit and writeback to cache while returning valid
-                                state      <= REQUEST_MEM_READ;
-                                o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
-                                o_mem_en   <= '1';
-                                o_mem_wen  <= (others => '0');
+                                o_mem_wen   <= wen_reg;
+                                o_mem_wdata <= cache_wdata_reg;
                             end if;
 
                         elsif (write_hit = '1') then
@@ -292,13 +301,21 @@ begin
                             en_reg <= '0';
                             state  <= IDLE;
                         elsif (read_miss = '1') then
-                            if (metadata.dirty = '1') then
-                                -- need to write memory, read memory, then writeback to cache while returning valid
-                                state       <= REQUEST_MEM_WRITE;
-                                o_mem_addr  <= metadata.upper_address & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
-                                o_mem_en    <= '1';
-                                o_mem_wen   <= (others => '1');
-                                o_mem_wdata <= cache_rdata;
+                            if (is_cacheable = '1') then
+                                if (metadata.dirty = '1') then
+                                    -- need to write memory, read memory, then writeback to cache while returning valid
+                                    state       <= REQUEST_MEM_WRITE;
+                                    o_mem_addr  <= metadata.upper_address & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                    o_mem_en    <= '1';
+                                    o_mem_wen   <= (others => '1');
+                                    o_mem_wdata <= cache_rdata;
+                                else
+                                    -- need to read memory and then writeback to cache while returning valid
+                                    state      <= REQUEST_MEM_READ;
+                                    o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                    o_mem_en   <= '1';
+                                    o_mem_wen  <= (others => '0');
+                                end if;
                             else
                                 -- need to read memory and then writeback to cache while returning valid
                                 state      <= REQUEST_MEM_READ;
@@ -311,11 +328,16 @@ begin
                     when REQUEST_MEM_WRITE =>
                         o_mem_en <= '0';
                         if (i_mem_valid = '1') then
-                            -- Now we need to request a mem read
-                            state      <= REQUEST_MEM_READ;
-                            o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
-                            o_mem_en   <= '1';
-                            o_mem_wen  <= (others => '0');
+                            if (status.is_cacheable = '1') then
+                                -- Now we need to request a mem read
+                                state      <= REQUEST_MEM_READ;
+                                o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                o_mem_en   <= '1';
+                                o_mem_wen  <= (others => '0');
+                            else
+                                valid <= '1';
+                                state <= IDLE;
+                            end if;
                         end if;
 
                     when REQUEST_MEM_READ =>
@@ -331,7 +353,7 @@ begin
                             
                             cacheline_addr_b <= cacheline_addr_reg;
                             valid            <= '1';
-                            metadata_w.dirty <= '0';
+                            metadata_w.dirty <= any(wen_reg);
                             metadata_w.valid <= '1';
                             metadata_w.upper_address <= upper_addr_reg;
 

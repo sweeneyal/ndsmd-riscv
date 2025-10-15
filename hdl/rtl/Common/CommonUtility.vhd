@@ -27,6 +27,7 @@ package CommonUtility is
 
     function bool2bit(value: boolean) return std_logic;
     function any(a : std_logic_vector) return std_logic;
+    function all_set(a : std_logic_vector) return std_logic;
     function shape(slv : std_logic_vector; lhdx : natural; rhdx : natural) return std_logic_vector;
     function shape(slv : unsigned; lhdx : natural; rhdx : natural) return unsigned;
     function shape(slv : signed; lhdx : natural; rhdx : natural) return signed;
@@ -112,6 +113,17 @@ package body CommonUtility is
             end if;
         end loop;
         return '0';
+    end function;
+
+    function all_set(a : std_logic_vector) return std_logic is
+        variable ret : std_logic := '0';
+    begin
+        for ii in a'range loop
+            if (a(ii) = '0') then
+                return '0';
+            end if;
+        end loop;
+        return '1';
     end function;
 
     function shape(slv : std_logic_vector; lhdx : natural; rhdx : natural) return std_logic_vector is
