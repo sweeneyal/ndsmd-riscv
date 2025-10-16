@@ -113,10 +113,20 @@ begin
     upper_memaddr <= i_cache_addr(
         cAddressWidth_b - 1 downto clog2(cCacheSize_entries) + clog2(cCachelineSize_B));
 
+    MaskChecking: process(i_cache_addr)
+        variable v : std_logic := '0';
+    begin
+        v := '0';
+        for ii in 0 to cNumCacheMasks - 1 loop
+            v := v or bool2bit((cCacheMasks(ii) or i_cache_addr) = cCacheMasks(ii));
+        end loop;
+        is_cacheable <= v;
+    end process MaskChecking;
+
     -- Since we don't allow back-to-back accesses, we disallow that by filtering one cycle after.
     cache_en  <= i_cache_en and bool2bit(state = IDLE);
     -- Since we're not doing byte addressable caching, we just check if any of them need to be written.
-    cache_wen <= any(i_cache_wen);
+    cache_wen <= any(i_cache_wen) and is_cacheable;
 
     eBram : entity ndsmd_riscv.DualPortBram
     generic map (
@@ -162,16 +172,6 @@ begin
 
     metadata   <= slv_to_metadata(meta_rdata);
     meta_wdata <= metadata_to_slv(metadata_w);
-
-    MaskChecking: process(i_cache_addr)
-        variable v : std_logic := '0';
-    begin
-        v := '0';
-        for ii in 0 to cNumCacheMasks - 1 loop
-            v := v or bool2bit((cCacheMasks(ii) or i_cache_addr) = cCacheMasks(ii));
-        end loop;
-        is_cacheable <= v;
-    end process MaskChecking;
 
     is_read <= bool2bit(
         -- we're accessing the bram
@@ -255,7 +255,11 @@ begin
                         valid <= '0';
 
                         if (write_miss = '1') then
+                            -- If a write miss occurs, and its a cacheable element, we need to load
+                            -- it into the cache.
                             if (is_cacheable = '1') then
+                                -- Check if the mapped cache location is dirty or not,
+                                -- and if so, we need to perform a memory write with the cache data.
                                 if (metadata.dirty = '1') then
                                     -- need to write memory, read memory, edit and writeback to cache while returning valid
                                     state       <= REQUEST_MEM_WRITE;
@@ -264,14 +268,16 @@ begin
                                     o_mem_wen   <= (others => '1');
                                     o_mem_wdata <= cache_rdata;
                                 else
-                                    -- need to read memory, edit and writeback to cache while returning valid
+                                    -- Otherwise, we can simply drop the cache data and 
+                                    -- overwrite it with a memory read.
                                     state      <= REQUEST_MEM_READ;
                                     o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                     o_mem_en   <= '1';
                                     o_mem_wen  <= (others => '0');
                                 end if;
                             else
-                                -- need to write memory, read memory, edit and writeback to cache while returning valid
+                                -- However, if we're uncacheable, then it doesn't matter if the corresponding location is dirty or not.
+                                -- We need to just write to memory.
                                 state       <= REQUEST_MEM_WRITE;
                                 o_mem_addr  <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                 o_mem_en    <= '1';
@@ -280,7 +286,9 @@ begin
                             end if;
 
                         elsif (write_hit = '1') then
-                            -- need to read cache, edit and writeback to cache while returning valid
+                            -- If we have a write hit, this means we do not have an uncacheable.
+                            -- Therefore, we need to read cache, edit and writeback to cache while 
+                            -- returning valid.
                             en_reg <= '0';
                             state  <= IDLE;
                             for ii in 0 to cCachelineSize_B - 1 loop
@@ -297,11 +305,14 @@ begin
                             metadata_w.valid <= '1';
                             metadata_w.upper_address <= upper_addr_reg;
                         elsif (read_hit = '1') then
-                            -- read hit, no change
+                            -- If we have a read hit, we do not have an uncacheable and otherwise
+                            -- nothing changes.
                             en_reg <= '0';
                             state  <= IDLE;
                         elsif (read_miss = '1') then
                             if (is_cacheable = '1') then
+                                -- If we have a cacheable read miss, once again we need to check if the 
+                                -- location we're replacing is dirty, and if so, then we need to perform a write.
                                 if (metadata.dirty = '1') then
                                     -- need to write memory, read memory, then writeback to cache while returning valid
                                     state       <= REQUEST_MEM_WRITE;
@@ -310,14 +321,15 @@ begin
                                     o_mem_wen   <= (others => '1');
                                     o_mem_wdata <= cache_rdata;
                                 else
-                                    -- need to read memory and then writeback to cache while returning valid
+                                    -- Otherwise, we can simply drop the cache data and 
+                                    -- overwrite it with a memory read.
                                     state      <= REQUEST_MEM_READ;
                                     o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                     o_mem_en   <= '1';
                                     o_mem_wen  <= (others => '0');
                                 end if;
                             else
-                                -- need to read memory and then writeback to cache while returning valid
+                                -- If we have an uncacheable read miss, we need to complete the request as follows.
                                 state      <= REQUEST_MEM_READ;
                                 o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                 o_mem_en   <= '1';
@@ -328,13 +340,21 @@ begin
                     when REQUEST_MEM_WRITE =>
                         o_mem_en <= '0';
                         if (i_mem_valid = '1') then
+                            -- Once memory responds, if we're cacheable we will request a read.
+                            -- This is because to get to this state, a read or write miss occurred with
+                            -- a dirty mapping so we needed to write the dirty data before we could read 
+                            -- the clean data.
                             if (status.is_cacheable = '1') then
-                                -- Now we need to request a mem read
+                                -- Now we need to request a mem read using the registered original request.
                                 state      <= REQUEST_MEM_READ;
                                 o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                 o_mem_en   <= '1';
                                 o_mem_wen  <= (others => '0');
                             else
+                                -- If we are not cacheable, we requested a write because of a write "miss".
+                                -- Therefore, we're done because we did the operation as requested.
+
+                                rdata <= (others => '0');
                                 valid <= '1';
                                 state <= IDLE;
                             end if;
@@ -343,6 +363,9 @@ begin
                     when REQUEST_MEM_READ =>
                         o_mem_en <= '0';
                         if (i_mem_valid = '1') then
+                            -- Once memory responds, if we're cacheable we will write back the 
+                            -- necessary cacheable data, otherwise it will continue to be passed back
+                            -- to the processor.
                             for ii in 0 to cCachelineSize_B - 1 loop
                                 if (wen_reg(ii) = '1') then
                                     rdata(8 * ii + 7 downto 8 * ii) <= cache_wdata_reg(8 * ii + 7 downto 8 * ii);
