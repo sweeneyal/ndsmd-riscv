@@ -89,16 +89,9 @@ architecture rtl of MemoryUnit is
 
     type prestate_t is (IDLE, WAIT_FOR_RESPONSE);
     signal prestate : prestate_t := IDLE;
-
-    type state_t is (IDLE, PERFORM_AXI_WRITE, PERFORM_AXI_READ);
-    signal state : state_t := IDLE;
     signal stored_addr : std_logic_vector(cAddressWidth_b - 1 downto 0) := (others => '0');
     signal stored_data : std_logic_vector(31 downto 0) := (others => '0');
     signal stored_decoded : decoded_instr_t;
-
-    signal dbg_axi_transactions : std_logic_vector(2 downto 0) := "000";
-    signal dbg_misaligned : std_logic := '0';
-    signal dbg_prev_misaligned : std_logic := '0';
 
     signal cache_addr  : std_logic_vector(cAddressWidth_b - 1 downto 0);
     signal cache_en    : std_logic;
@@ -390,115 +383,48 @@ begin
         
     end generate gCache;
 
-
-    StateMachine: process(i_clk)
-        variable lsb : natural range 0 to cCachelineSize_B - 1 := 0;
-        variable misaligned : std_logic := '0';
-        variable prev_misaligned : std_logic := '0';
-        variable axi_transactions : std_logic_vector(2 downto 0) := "000";
-    begin
-        if rising_edge(i_clk) then
-            if (i_resetn = '0') then
-                -- Possibly set ready signals to allow pre-reset but still-incoming 
-                -- transactions to pretend like they're accepted?
-                o_data_wstrb   <= (others => '0');
-                o_data_wvalid  <= '0';
-                o_data_arvalid <= '0';
-                o_data_awvalid <= '0';
-                o_data_bready  <= '0';
-                o_data_rready  <= '0';
-                o_data_wdata   <= (others => '0');
-                o_data_arprot  <= (others => '0');
-                o_data_awprot  <= (others => '0');
-            else
-                case state is
-                    when IDLE =>
-                        o_data_awvalid <= '0';
-                        o_data_wvalid  <= '0';
-                        o_data_bready  <= '0';
-                        o_data_awprot  <= (others => '0');
-                        
-                        o_data_arvalid <= '0';
-                        o_data_rready  <= '0';
-                        o_data_arprot  <= (others => '0');
-
-                        o_data_awaddr <= mem_addr;
-                        o_data_araddr <= mem_addr;
-                        o_data_wdata  <= mem_wdata;
-                        o_data_wstrb  <= mem_wen;
-
-                        mem_valid <= '0';
-
-                        if (mem_en = '1') then
-                            if (any(mem_wen) = '1') then
-                                state <= PERFORM_AXI_WRITE;
-                                o_data_awvalid <= '1';
-                                o_data_wvalid  <= '1';
-                                o_data_bready  <= '1';
-                            else
-                                state <= PERFORM_AXI_READ;
-                                o_data_arvalid <= '1';
-                                o_data_rready  <= '1';
-                            end if;
-                        end if;
-                
-                    when PERFORM_AXI_WRITE =>
-                        if (i_data_awready = '1') then
-                            o_data_awvalid <= '0';
-                            axi_transactions(0) := '1';
-                        end if;
-
-                        if (i_data_wready = '1') then
-                            o_data_wvalid <= '0';
-                            -- Be sure to clear wstrb in case we initiate another transfer
-                            -- (i.e. we were misaligned.)
-                            o_data_wstrb  <= (others => '0');
-                            axi_transactions(1) := '1';
-                        end if;
-
-                        if (i_data_bvalid = '1') then
-                            o_data_bready <= '0';
-                            axi_transactions(2) := '1';
-                        end if;
-
-                        if (axi_transactions = "111") then
-                            axi_transactions := "000";
-
-                            mem_rdata <= (others => '0');
-                            mem_valid <= '1';
-                            state     <= IDLE;
-                        end if;
-
-                    when PERFORM_AXI_READ =>
-                        if (i_data_arready = '1') then
-                            o_data_arvalid <= '0';
-                            axi_transactions(0) := '1';
-                        end if;
-
-                        if (i_data_rvalid = '1') then
-                            mem_rdata <= i_data_rdata;
-
-                            o_data_rready <= '0';
-                            axi_transactions(1) := '1';
-                        end if;
-
-                        if (axi_transactions = "011") then
-                            axi_transactions := "000";
-
-                            mem_valid <= '1';
-                            state <= IDLE;
-                        end if;
-
-                end case;
-            end if;
-            dbg_axi_transactions <= axi_transactions;
-            dbg_misaligned       <= misaligned;
-            dbg_prev_misaligned  <= prev_misaligned;
-        end if;
-    end process StateMachine;
-
     -- Hot take, but could we also integrate memory mapped peripherals
     -- here? Specifically high performance ones, like timers and stuff that
     -- would otherwise have to be placed on the AXI bus?
+
+    eBus2Axi : entity ndsmd_riscv.Bus2Axi
+    generic map (
+        cAddressWidth_b => cAddressWidth_b,
+        cCachelineSize_B => cCachelineSize_B
+    ) port map (
+        i_clk    => i_clk,
+        i_resetn => i_resetn,
+
+        i_bus_addr  => mem_addr,
+        i_bus_en    => mem_en,
+        i_bus_wen   => mem_wen,
+        i_bus_wdata => mem_wdata,
+        o_bus_rdata => mem_rdata,
+        o_bus_valid => mem_valid,
+
+        o_axi_awaddr  => o_data_awaddr,
+        o_axi_awprot  => o_data_awprot,
+        o_axi_awvalid => o_data_awvalid,
+        i_axi_awready => i_data_awready,
+
+        o_axi_wdata  => o_data_wdata,
+        o_axi_wstrb  => o_data_wstrb,
+        o_axi_wvalid => o_data_wvalid,
+        i_axi_wready => i_data_wready,
+
+        i_axi_bresp  => i_data_bresp,
+        i_axi_bvalid => i_data_bvalid,
+        o_axi_bready => o_data_bready,
+
+        o_axi_araddr  => o_data_araddr,
+        o_axi_arprot  => o_data_arprot,
+        o_axi_arvalid => o_data_arvalid,
+        i_axi_arready => i_data_arready,
+
+        i_axi_rdata  => i_data_rdata,
+        i_axi_rresp  => i_data_rresp,
+        i_axi_rvalid => i_data_rvalid,
+        o_axi_rready => o_data_rready
+    );
     
 end architecture rtl;

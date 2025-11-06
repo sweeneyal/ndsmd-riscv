@@ -28,16 +28,49 @@ library ieee;
     use ieee.numeric_std.all;
 
 library ndsmd_riscv;
+    use ndsmd_riscv.CommonUtility.all;
 
 entity NdsmdRv32 is
     generic (
-        -- the number of buffered transactions
-        cPrefetch_NumTransactions : natural := 2;
-
-        -- the width of of the address bus
-        cMemoryUnit_AddressWidth_b  : natural := 32;
+        -------------------------------------------------------------------------
+        -- Processor Configuration Generics
+        -------------------------------------------------------------------------
         -- the size of the cache line (aka cache block size)
-        cMemoryUnit_CachelineSize_B : natural := 16;
+        cProcessor_CachelineSize_B : natural := 16;
+
+        -------------------------------------------------------------------------
+        -- L1iCache Configuration Generics
+        -------------------------------------------------------------------------
+        -- whether or not to enable the L1i cache in the prefetcher
+        cL1iCache_Enabled : boolean := true;
+        -- what type of cache is used in the L1i cache (direct, set-assoc)
+        cL1iCache_CacheType : string := "DirectPiped";
+        -- number of entries in the cache
+        cL1iCache_Size_entries : positive := 1024;
+        -- number of sets in the cache
+        cL1iCache_NumSets : positive := 1;
+        -- number of masks used to identify cacheable address ranges
+        cL1iCache_NumCacheMasks : positive := 1;
+        -- masks used to identify cacheable address ranges
+        cL1iCache_Masks : std_logic_matrix_t
+            (0 to cL1iCache_NumCacheMasks - 1)(31 downto 0) := (0 => x"0000FFFF");
+
+        -------------------------------------------------------------------------
+        -- L1dCache Configuration Generics
+        -------------------------------------------------------------------------
+        -- whether or not to enable the L1d cache in the prefetcher
+        cL1dCache_Enabled : boolean := true;
+        -- what type of cache is used in the L1d cache (direct, set-assoc)
+        cL1dCache_CacheType : string := "Direct";
+        -- number of entries in the cache
+        cL1dCache_Size_entries : positive := 1024;
+        -- number of sets in the cache
+        cL1dCache_NumSets : positive := 1;
+        -- number of masks used to identify cacheable address ranges
+        cL1dCache_NumCacheMasks : positive := 1;
+        -- masks used to identify cacheable address ranges
+        cL1dCache_Masks : std_logic_matrix_t
+            (0 to cL1dCache_NumCacheMasks - 1)(31 downto 0) := (0 => x"0000FFFF");
 
         -- flag for generating the division unit
         cMExtension_GenerateDivisionUnit : boolean := false;
@@ -46,11 +79,7 @@ entity NdsmdRv32 is
         cZiCsr_TrapBaseAddress : unsigned(31 downto 0);
 
         -- instantiate debug unit
-        cDebug_GenerateDebugUnit : boolean := true;
-
-        -- cache instantiation controls
-        cL1iCache_Size_entries : positive := 1024;
-        cL1dCache_Size_entries : positive := 1024
+        cDebug_GenerateDebugUnit : boolean := true
     );
     port (
         -- system clock frequency
@@ -72,9 +101,9 @@ entity NdsmdRv32 is
         m_axi_instr_awready : in std_logic;
 
         -- write data bus
-        m_axi_instr_wdata  : out std_logic_vector(31 downto 0);
+        m_axi_instr_wdata  : out std_logic_vector(8 * cProcessor_CachelineSize_B - 1 downto 0);
         -- write data strobe
-        m_axi_instr_wstrb : out std_logic_vector(3 downto 0);
+        m_axi_instr_wstrb : out std_logic_vector(cProcessor_CachelineSize_B - 1 downto 0);
         -- write valid
         m_axi_instr_wvalid : out std_logic;
         -- write ready
@@ -97,7 +126,7 @@ entity NdsmdRv32 is
         m_axi_instr_arready : in std_logic;
 
         -- returned instruction data bus
-        m_axi_instr_rdata  : in std_logic_vector(31 downto 0);
+        m_axi_instr_rdata  : in std_logic_vector(8 * cProcessor_CachelineSize_B - 1 downto 0);
         -- response indicating error occurred, if any
         m_axi_instr_rresp : in std_logic_vector(1 downto 0);
         -- valid signal indicating that instruction data is valid
@@ -110,7 +139,7 @@ entity NdsmdRv32 is
         -------------------------------------------------------
         -- AXI-like interface to allow for easier implementation
         -- address bus for requesting an address
-        m_axi_data_awaddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
+        m_axi_data_awaddr : out std_logic_vector(31 downto 0);
         -- protection level of the transaction
         m_axi_data_awprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -119,9 +148,9 @@ entity NdsmdRv32 is
         m_axi_data_awready : in std_logic;
 
         -- write data bus
-        m_axi_data_wdata  : out std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
+        m_axi_data_wdata  : out std_logic_vector(8 * cProcessor_CachelineSize_B - 1 downto 0);
         -- write data strobe
-        m_axi_data_wstrb : out std_logic_vector(cMemoryUnit_CachelineSize_B - 1 downto 0);
+        m_axi_data_wstrb : out std_logic_vector(cProcessor_CachelineSize_B - 1 downto 0);
         -- write valid
         m_axi_data_wvalid : out std_logic;
         -- write ready
@@ -135,7 +164,7 @@ entity NdsmdRv32 is
         m_axi_data_bready : out std_logic;
 
         -- address bus for requesting an address
-        m_axi_data_araddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
+        m_axi_data_araddr : out std_logic_vector(31 downto 0);
         -- protection level of the transaction
         m_axi_data_arprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -144,7 +173,7 @@ entity NdsmdRv32 is
         m_axi_data_arready : in std_logic;
 
         -- returned instruction data bus
-        m_axi_data_rdata  : in std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
+        m_axi_data_rdata  : in std_logic_vector(8 * cProcessor_CachelineSize_B - 1 downto 0);
         -- response indicating error occurred, if any
         m_axi_data_rresp : in std_logic_vector(1 downto 0);
         -- valid signal indicating that instruction data is valid
@@ -159,9 +188,22 @@ begin
     
     eCore : entity ndsmd_riscv.ProcessorCore
     generic map (
-        cPrefetch_NumTransactions        => cPrefetch_NumTransactions,
-        cMemoryUnit_AddressWidth_b       => cMemoryUnit_AddressWidth_b,
-        cMemoryUnit_CachelineSize_B      => cMemoryUnit_CachelineSize_B,
+        cProcessor_CachelineSize_B       => cProcessor_CachelineSize_B,
+
+        cL1iCache_Enabled       => cL1iCache_Enabled,
+        cL1iCache_CacheType     => cL1iCache_CacheType,
+        cL1iCache_Size_entries  => cL1iCache_Size_entries,
+        cL1iCache_NumSets       => cL1iCache_NumSets,
+        cL1iCache_NumCacheMasks => cL1iCache_NumCacheMasks,
+        cL1iCache_Masks         => cL1iCache_Masks,
+
+        cL1dCache_Enabled       => cL1dCache_Enabled,
+        cL1dCache_CacheType     => cL1dCache_CacheType,
+        cL1dCache_Size_entries  => cL1dCache_Size_entries,
+        cL1dCache_NumSets       => cL1dCache_NumSets,
+        cL1dCache_NumCacheMasks => cL1dCache_NumCacheMasks,
+        cL1dCache_Masks         => cL1dCache_Masks,
+
         cMExtension_GenerateDivisionUnit => cMExtension_GenerateDivisionUnit,
         cZiCsr_TrapBaseAddress           => cZiCsr_TrapBaseAddress
     ) port map (

@@ -28,22 +28,47 @@ library ieee;
     use ieee.numeric_std.all;
 
 library ndsmd_riscv;
+    use ndsmd_riscv.CommonUtility.all;
     use ndsmd_riscv.InstructionUtility.all;
     use ndsmd_riscv.DatapathUtility.all;
 
 entity ProcessorCore is
     generic (
-        -- the number of buffered transactions
-        cPrefetch_NumTransactions : natural := 2;
+        -- the size of the cache line (aka cache block size)
+        cProcessor_CachelineSize_B : natural := 16;
+
+        -- whether or not to enable the L1i cache in the prefetcher
+        cL1iCache_Enabled : boolean := true;
+        -- what type of cache is used in the L1i cache (direct, set-assoc)
+        cL1iCache_CacheType : string := "DirectPiped";
+        -- number of entries in the cache
+        cL1iCache_Size_entries : positive := 1024;
+        -- number of sets in the cache
+        cL1iCache_NumSets : positive := 1;
+        -- number of masks used to identify cacheable address ranges
+        cL1iCache_NumCacheMasks : positive := 1;
+        -- masks used to identify cacheable address ranges
+        cL1iCache_Masks : std_logic_matrix_t
+            (0 to cL1iCache_NumCacheMasks - 1)(31 downto 0) := (0 => x"0000FFFF");
+
+        -- whether or not to enable the L1d cache in the prefetcher
+        cL1dCache_Enabled : boolean := true;
+        -- what type of cache is used in the L1d cache (direct, set-assoc)
+        cL1dCache_CacheType : string := "Direct";
+        -- number of entries in the cache
+        cL1dCache_Size_entries : positive := 1024;
+        -- number of sets in the cache
+        cL1dCache_NumSets : positive := 1;
+        -- number of masks used to identify cacheable address ranges
+        cL1dCache_NumCacheMasks : positive := 1;
+        -- masks used to identify cacheable address ranges
+        cL1dCache_Masks : std_logic_matrix_t
+            (0 to cL1dCache_NumCacheMasks - 1)(31 downto 0) := (0 => x"0000FFFF");
+
         -- the severity of the error caused by pc update not aligned to a multiple of 4;
         -- this normally is a failure, but during testing with random instruction generation,
         -- this is downgraded to a warning.
         cPrefetch_PcMisalignmentSeverity : severity_level := failure;
-
-        -- the width of of the address bus
-        cMemoryUnit_AddressWidth_b  : natural := 32;
-        -- the size of the cache line (aka cache block size)
-        cMemoryUnit_CachelineSize_B : natural := 16;
 
         -- flag for generating the division unit
         cMExtension_GenerateDivisionUnit : boolean := true;
@@ -77,7 +102,7 @@ entity ProcessorCore is
         i_instr_arready : in std_logic;
 
         -- returned instruction data bus
-        i_instr_rdata  : in std_logic_vector(31 downto 0);
+        i_instr_rdata  : in std_logic_vector(8 * cProcessor_CachelineSize_B - 1 downto 0);
         -- response indicating error occurred, if any
         i_instr_rresp : in std_logic_vector(1 downto 0);
         -- valid signal indicating that instruction data is valid
@@ -90,7 +115,7 @@ entity ProcessorCore is
         -------------------------------------------------------
         -- AXI-like interface to allow for easier implementation
         -- address bus for requesting an address
-        o_data_awaddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
+        o_data_awaddr : out std_logic_vector(31 downto 0);
         -- protection level of the transaction
         o_data_awprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -99,9 +124,9 @@ entity ProcessorCore is
         i_data_awready : in std_logic;
 
         -- write data bus
-        o_data_wdata  : out std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
+        o_data_wdata  : out std_logic_vector(8 * cProcessor_CachelineSize_B - 1 downto 0);
         -- write data strobe
-        o_data_wstrb : out std_logic_vector(cMemoryUnit_CachelineSize_B - 1 downto 0);
+        o_data_wstrb : out std_logic_vector(cProcessor_CachelineSize_B - 1 downto 0);
         -- write valid
         o_data_wvalid : out std_logic;
         -- write ready
@@ -115,7 +140,7 @@ entity ProcessorCore is
         o_data_bready : out std_logic;
 
         -- address bus for requesting an address
-        o_data_araddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
+        o_data_araddr : out std_logic_vector(31 downto 0);
         -- protection level of the transaction
         o_data_arprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -124,7 +149,7 @@ entity ProcessorCore is
         i_data_arready : in std_logic;
 
         -- returned instruction data bus
-        i_data_rdata  : in std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
+        i_data_rdata  : in std_logic_vector(8 * cProcessor_CachelineSize_B - 1 downto 0);
         -- response indicating error occurred, if any
         i_data_rresp : in std_logic_vector(1 downto 0);
         -- valid signal indicating that instruction data is valid
@@ -149,7 +174,15 @@ begin
     
     ePrefetcher : entity ndsmd_riscv.InstrPrefetcher
     generic map (
-        cNumTransactions        => cPrefetch_NumTransactions,
+        cCachelineSize_B => cProcessor_CachelineSize_B,
+
+        cGenerateCache     => cL1iCache_Enabled,
+        cCacheType         => cL1iCache_CacheType,
+        cCacheSize_entries => cL1iCache_Size_entries,
+        cCache_NumSets     => cL1iCache_NumSets,
+        cNumCacheMasks     => cL1iCache_NumCacheMasks,
+        cCacheMasks        => cL1iCache_Masks,
+
         cPcMisalignmentSeverity => cPrefetch_PcMisalignmentSeverity
     ) port map (
         i_clk    => i_clk,
@@ -191,8 +224,13 @@ begin
 
     eDatapath : entity ndsmd_riscv.Datapath
     generic map (
-        cMemoryUnit_AddressWidth_b       => cMemoryUnit_AddressWidth_b,
-        cMemoryUnit_CachelineSize_B      => cMemoryUnit_CachelineSize_B,
+        cProcessor_CachelineSize_B => cProcessor_CachelineSize_B,
+        cL1dCache_Enabled       => cL1dCache_Enabled,
+        cL1dCache_CacheType     => cL1dCache_CacheType,
+        cL1dCache_Size_entries  => cL1dCache_Size_entries,
+        cL1dCache_NumSets       => cL1dCache_NumSets,
+        cL1dCache_NumCacheMasks => cL1dCache_NumCacheMasks,
+        cL1dCache_Masks         => cL1dCache_Masks,
         cMExtension_GenerateDivisionUnit => cMExtension_GenerateDivisionUnit,
         cZiCsr_TrapBaseAddress           => cZiCsr_TrapBaseAddress
     ) port map (

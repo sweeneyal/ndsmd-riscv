@@ -162,7 +162,7 @@ begin
                 wait until rising_edge(clk);
                 wait for 100 ps;
 
-                for ii in 0 to 50000 loop
+                for ii in 0 to 200000 loop
                     if (i_responses.instr_arvalid = '1') then
                         addresses.append(i_responses.instr_araddr);
                         stimuli.instr_arready <= '1';
@@ -189,6 +189,6 @@ begin
         test_runner_cleanup(runner);
     end process;
 
-    test_runner_watchdog(runner, 2 ms);
+    test_runner_watchdog(runner, 4 ms);
     
 end architecture rtl;

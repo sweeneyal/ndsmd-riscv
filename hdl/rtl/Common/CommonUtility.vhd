@@ -13,6 +13,8 @@ package CommonUtility is
     function reverse (a: in std_logic_vector) return std_logic_vector;
 
     function to_slv(intVal : integer; size : natural) return std_logic_vector;
+    function to_slv(a : string) return std_logic_vector;
+    function to_slv(c : character) return std_logic_vector;
     function to_integer(vector : std_logic_vector) return integer;
     function to_natural(vector : std_logic_vector) return natural;
     function to_byte(char : character) return byte_t;
@@ -60,11 +62,48 @@ package body CommonUtility is
         return result;
     end;
 
-
     function to_slv(intVal : integer; size : natural) return std_logic_vector is
     begin
         return std_logic_vector(to_signed(intVal, size));
     end function;
+
+    -- Uses a hex string to slv, not bitstring
+    function to_slv(a : string) return std_logic_vector is
+        variable ret : std_logic_vector(a'length*4-1 downto 0);
+    begin
+        for i in a'range loop
+            ret((i - 1)*4+3 downto (i - 1)*4) := to_slv(a(i));
+        end loop;
+        return ret;
+    end function to_slv;
+
+    function to_slv(c : character) return std_logic_vector is
+        variable slv : std_logic_vector(3 downto 0);
+    begin
+        case c is
+            when '0'       => slv := "0000";
+            when '1'       => slv := "0001";
+            when '2'       => slv := "0010";
+            when '3'       => slv := "0011";
+            when '4'       => slv := "0100";
+            when '5'       => slv := "0101";
+            when '6'       => slv := "0110";
+            when '7'       => slv := "0111";
+            when '8'       => slv := "1000";
+            when '9'       => slv := "1001";
+            when 'A' | 'a' => slv := "1010";
+            when 'B' | 'b' => slv := "1011";
+            when 'C' | 'c' => slv := "1100";
+            when 'D' | 'd' => slv := "1101";
+            when 'E' | 'e' => slv := "1110";
+            when 'F' | 'f' => slv := "1111";
+            when others =>
+                slv := "XXXX";
+                report "Invalid value passed into hchar_to_slv: " & c
+                severity failure;
+        end case;
+        return slv;
+    end function to_slv;
 
     function to_integer(vector : std_logic_vector) return integer is
     begin

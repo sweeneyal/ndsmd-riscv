@@ -270,9 +270,9 @@ architecture rtl of ControlEngine is
                         decoded.condition := EQUAL;
                     when "001" =>
                         decoded.condition := NOT_EQUAL;
-                    when "100" | "101" =>
+                    when "100" | "110" =>
                         decoded.condition := LESS_THAN;
-                    when "110" | "111" =>
+                    when "101" | "111" =>
                         decoded.condition := GREATER_THAN_EQ;
                     when others =>
                         assert false report "ControlEngine::contextual_decode: Malformed Instruction" severity failure;
@@ -451,12 +451,41 @@ architecture rtl of ControlEngine is
 
     signal stalled    : stage_status_t;
     signal cpu_ready  : std_logic := '0';
+
+    signal issued_o : stage_status_t := stage_status_t'(
+                    id           => -1,
+                    pc           => (others => '0'),
+                    instr        => decoded_instr_t'(
+                        base           => decode(x"00000000"),
+                        unit           => ALU,
+                        operation      => NULL_OP,
+                        source1        => REGISTERS,
+                        source2        => REGISTERS,
+                        immediate      => (others => '0'),
+                        mem_operation  => NULL_OP,
+                        mem_access     => BYTE_ACCESS,
+                        jump_branch    => NOT_JUMP,
+                        condition      => NO_COND,
+                        new_pc         => (others => '0'),
+                        fp_format      => NULL_FORMAT,
+                        fp_qualifiers  => NULL_QUALIFIER,
+                        csr_operation  => NULL_OP,
+                        csr_access     => CSRRW,
+                        destination    => REGISTERS
+                    ),
+                    valid        => '0',
+                    stall_reason => NOT_STALLED,
+                    rs1_hzd      => -1, -- These values will be overwritten by the below function calls.
+                    rs2_hzd      => -1
+                );
 begin
     
     -- An idea is to precompute the branch and jump PCs here (with the exception of JALR, not sure what to do here.)
     -- This same logic can be used for LUI and AUIPC.
 
     o_cpu_ready <= cpu_ready;
+
+    o_issued <= issued_o;
 
     StateMachine: process(i_clk)
         variable id      : issue_id_t := 0;
@@ -469,7 +498,7 @@ begin
             if (i_resetn = '0') then
                 stalled.valid  <= '0';
                 cpu_ready      <= '0';
-                o_issued <= stage_status_t'(
+                issued_o <= stage_status_t'(
                     id           => -1,
                     pc           => (others => '0'),
                     instr        => decoded_instr_t'(
@@ -499,7 +528,17 @@ begin
                 if (i_pcwen = '1') then
                     stalled.valid  <= '0';
                     cpu_ready      <= '0';
-                    o_issued.valid <= '0';
+                    if ((i_status.execute.stall_reason /= NOT_STALLED or 
+                        i_status.memaccess.stall_reason /= NOT_STALLED or 
+                            i_status.writeback.stall_reason /= NOT_STALLED) and 
+                                issued_o.valid = '1') then
+                        -- If we're stalled during a jump, keep the issued instruction valid 
+                        -- because otherwise it will be dropped.
+                        issued_o.valid <= '1';
+                    else
+                        -- Otherwise, clear the valid signal.
+                        issued_o.valid <= '0';
+                    end if;
                 elsif (i_status.execute.stall_reason /= NOT_STALLED or 
                         i_status.memaccess.stall_reason /= NOT_STALLED or 
                             i_status.writeback.stall_reason /= NOT_STALLED) then
@@ -543,27 +582,27 @@ begin
                             severity failure;
                         
                         -- Pass the stalled instruction to the datapath
-                        o_issued <= stalled;
+                        issued_o <= stalled;
 
                         -- Identify any current hazards in the datapath
                         rs1_hzd := find_hazards(stalled.instr.base.opcode, stalled.instr.source1, stalled.instr.base.rs1, i_status);
                         rs2_hzd := find_hazards(stalled.instr.base.opcode, stalled.instr.source2, stalled.instr.base.rs2, i_status);
 
                         -- Link the hazards to the issued instruction.
-                        o_issued.rs1_hzd <= rs1_hzd;
-                        o_issued.rs2_hzd <= rs2_hzd;
+                        issued_o.rs1_hzd <= rs1_hzd;
+                        issued_o.rs2_hzd <= rs2_hzd;
 
                         -- Temporary: if we have any hazards, we're going to stall until those hazards finish.
                         -- This is to avoid needing complex data hazard handling logic, also known as an excuse
                         -- in order to meet deadlines.
                         if (rs1_hzd = -1 and rs2_hzd = -1) then
-                            o_issued.valid <= '1';
+                            issued_o.valid <= '1';
                             stalled.valid  <= '0';
                             cpu_ready      <= '1';
                         else
                             -- Invalidate the ID temporarily since we cannot issue due to hazards.
-                            o_issued.id    <= -1;
-                            o_issued.valid <= '0';
+                            issued_o.id    <= -1;
+                            issued_o.valid <= '0';
                             stalled.valid  <= '1';
                             cpu_ready      <= '0';
                         end if;
@@ -575,7 +614,7 @@ begin
                         -- Since it's not valid, we dont give it its assigned ID yet, since if we
                         -- put it in the issued state and we have to stall for hazards,
                         -- we'll accidentally stall ourselves permanently.
-                        o_issued <= stage_status_t'(
+                        issued_o <= stage_status_t'(
                             id           => -1,
                             pc           => i_pc,
                             instr        => decoded,
@@ -601,20 +640,20 @@ begin
                         rs2_hzd := find_hazards(decoded.base.opcode, decoded.source2, decoded.base.rs2, i_status);
 
                         -- Link the hazards to the issued instruction.
-                        o_issued.rs1_hzd <= rs1_hzd;
-                        o_issued.rs2_hzd <= rs2_hzd;
+                        issued_o.rs1_hzd <= rs1_hzd;
+                        issued_o.rs2_hzd <= rs2_hzd;
 
                         -- Temporary: if we have any hazards, we're going to stall until those hazards finish.
                         -- This is to avoid needing complex data hazard handling logic, also known as an excuse
                         -- in order to meet deadlines.
                         if (rs1_hzd = -1 and rs2_hzd = -1) then
                             -- If there are no hazards, we allow it to have its ID now.
-                            o_issued.id    <= id;
-                            o_issued.valid <= '1';
+                            issued_o.id    <= id;
+                            issued_o.valid <= '1';
                             stalled.valid  <= '0';
                             cpu_ready      <= '1';
                         else
-                            o_issued.valid <= '0';
+                            issued_o.valid <= '0';
                             stalled.valid  <= '1';
                             cpu_ready      <= '0';
                         end if;
@@ -631,8 +670,8 @@ begin
                         cpu_ready <= '1';
 
                         -- We also need to not issue several of the same instruction,
-                        -- so drop the o_issued.valid signal here.
-                        o_issued <= stage_status_t'(
+                        -- so drop the issued_o.valid signal here.
+                        issued_o <= stage_status_t'(
                             id           => -1,
                             pc           => (others => '0'),
                             instr        => decoded_instr_t'(

@@ -29,8 +29,9 @@ entity SimpleCache is
         o_cache_rdata  : out std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
         o_cache_valid : out std_logic;
 
-        o_cache_hit  : out std_logic;
-        o_cache_miss : out std_logic;
+        o_cache_ready : out std_logic;
+        o_cache_hit   : out std_logic;
+        o_cache_miss  : out std_logic;
 
         o_mem_addr   : out std_logic_vector(cAddressWidth_b - 1 downto 0);
         o_mem_en     : out std_logic;
@@ -65,8 +66,9 @@ begin
             o_cache_rdata => o_cache_rdata,
             o_cache_valid => o_cache_valid,
 
-            o_cache_hit  => o_cache_hit,
-            o_cache_miss => o_cache_miss,
+            o_cache_ready => o_cache_ready,
+            o_cache_hit   => o_cache_hit,
+            o_cache_miss  => o_cache_miss,
 
             o_mem_addr  => o_mem_addr,
             o_mem_en    => o_mem_en,
@@ -77,7 +79,39 @@ begin
         );
 
     end generate gDirectMapped;
-    
-    
-    
+
+    gDirectPiped: if str_eq(cCacheType, "DirectPiped") generate
+
+        eCache : entity ndsmd_riscv.CachePipedDirectMapped
+        generic map (
+            cAddressWidth_b    => cAddressWidth_b,
+            cCachelineSize_B   => cCachelineSize_B,
+            cCacheSize_entries => cCacheSize_entries,
+            cNumCacheMasks     => cNumCacheMasks,
+            cCacheMasks        => cCacheMasks
+        ) port map (
+            i_clk    => i_clk,
+            i_resetn => i_resetn,
+
+            i_cache_addr  => i_cache_addr,
+            i_cache_en    => i_cache_en,
+            i_cache_wen   => i_cache_wen,
+            i_cache_wdata => i_cache_wdata,
+            o_cache_rdata => o_cache_rdata,
+            o_cache_valid => o_cache_valid,
+
+            o_cache_ready => o_cache_ready,
+            o_cache_hit   => o_cache_hit,
+            o_cache_miss  => o_cache_miss,
+
+            o_mem_addr  => o_mem_addr,
+            o_mem_en    => o_mem_en,
+            o_mem_wen   => o_mem_wen,
+            o_mem_wdata => o_mem_wdata,
+            i_mem_rdata => i_mem_rdata,
+            i_mem_valid => i_mem_valid
+        );
+        
+    end generate gDirectPiped;
+
 end architecture rtl;

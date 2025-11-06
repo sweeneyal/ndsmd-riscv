@@ -72,9 +72,8 @@ begin
     eDut : entity ndsmd_riscv.ProcessorCore
     generic map (
         cPrefetch_PcMisalignmentSeverity => warning,
-        cMemoryUnit_AddressWidth_b       => 32,
-        cMemoryUnit_CachelineSize_B      => 4,
-        cZiCsr_TrapBaseAddress           => cZiCsr_TrapBaseAddress
+        cProcessor_CachelineSize_B      => 4,
+        cZiCsr_TrapBaseAddress          => cZiCsr_TrapBaseAddress
     ) port map (
         i_clk    => stimuli.clk,
         i_resetn => stimuli.resetn,

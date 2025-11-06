@@ -1,47 +1,3 @@
------------------------------------------------------------------------------------------------------------------------
--- entity: InstrPrefetcher
---
--- library: ndsmd_riscv
--- 
--- signals:
---      i_clk    : system clock frequency
---      i_resetn : active low reset synchronous to the system clock
---    
---      o_instr_araddr : address bus for requesting an address
---      o_instr_arprot : protection level of the transaction
---      o_instr_arvalid : read enable signal indicating address bus request is valid
---      i_instr_arready : indicator that memory interface is ready to receive a request
---
---      i_instr_rdata  : returned instruction data bus
---      i_instr_rresp : response indicating error occurred, if any
---      i_instr_rvalid : valid signal indicating that instruction data is valid
---      o_instr_rready : ready to receive instruction data
---      
---      i_cpu_ready : indicator that processor is ready to run next available instruction
---      o_pc    : program counter of instruction
---      o_instr : instruction data decomposed and recomposed as a record
---      o_valid : indicator that pc and instr are both valid
---      
---      i_pc    : target program counter of a jump or branch
---      i_pcwen : indicator that target pc is valid
---
--- description:
---      This IP is designed to fetch instructions sequentially with maximum single-cycle
---      throughput. It handles stalls caused by both the memory unit and the downstream
---      processor. It is designed to the following specifications:
---          1. Under no stall conditions, i.e. no PC updates, no CPU stalls, and no 
---             memory stalls, it maintains a throughput of 1 instruction/cycle.
---          2. When CPU stalls occur, the stall lasts as long as the CPU stall, but returns
---             to designed throughput after stall.
---          3. When memory stalls occur, the stall lasts as long as the memory stall,
---             but returns to designed throughput after the stall.
---          4. Instructions will always be requested, received, and issued in order
---             based on the PC, barring PC updates.
---          5. When PC updates occur, the prefetcher itself will stall until all
---             dropped transactions have been received. 
---
------------------------------------------------------------------------------------------------------------------------
-
 library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
@@ -52,8 +8,25 @@ library ndsmd_riscv;
 
 entity InstrPrefetcher is
     generic (
-        -- the number of buffered transactions
-        cNumTransactions : natural := 2;
+        -------------------------------------------------------------------------
+        -- L1iCache Configuration Generics
+        -------------------------------------------------------------------------
+        -- the size of the cache line (aka cache block size)
+        cCachelineSize_B : positive := 16;
+        -- whether or not to enable the L1i cache in the prefetcher
+        cGenerateCache : boolean  := true;
+        -- what type of cache is used in the L1i cache (direct, set-assoc)
+        cCacheType : string   := "DirectPiped";
+        -- number of entries in the cache
+        cCacheSize_entries : positive := 1024;
+        -- number of sets in the cache
+        cCache_NumSets : positive := 1;
+        -- number of masks used to identify cacheable address ranges
+        cNumCacheMasks : positive := 1;
+        -- masks used to identify cacheable address ranges
+        cCacheMasks : std_logic_matrix_t
+            (0 to cNumCacheMasks - 1)(31 downto 0) := (0 => x"0000FFFF");
+
         -- the severity of the error caused by pc update not aligned to a multiple of 4;
         -- this normally is a failure, but during testing with random instruction generation,
         -- this is downgraded to a warning.
@@ -64,6 +37,8 @@ entity InstrPrefetcher is
         i_clk : in std_logic;
         -- active low reset synchronous to the system clock
         i_resetn : in std_logic;
+        -- ready indicator that system is ready to run
+        o_ready : out std_logic;
 
         -- AXI-like interface to allow for easier implementation
         -- address bus for requesting an address
@@ -76,7 +51,7 @@ entity InstrPrefetcher is
         i_instr_arready : in std_logic;
 
         -- returned instruction data bus
-        i_instr_rdata  : in std_logic_vector(31 downto 0);
+        i_instr_rdata  : in std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
         -- response indicating error occurred, if any
         i_instr_rresp : in std_logic_vector(1 downto 0);
         -- valid signal indicating that instruction data is valid
@@ -106,6 +81,40 @@ architecture rtl of InstrPrefetcher is
         valid   : std_logic;
         dropped : std_logic;
     end record prefetch_request_t;
+
+    type prefetch_pipeline_t is array (0 to 2) of prefetch_request_t;
+
+    function get_oldest(p : prefetch_pipeline_t) return integer is
+    begin
+        for ii in 2 downto 0 loop
+            if (p(ii).valid = '1') then
+                return ii;
+            end if;
+        end loop;
+        return -1;
+    end function;
+
+    function any(p : prefetch_pipeline_t) return std_logic is
+        variable v : std_logic := '0';
+    begin
+        v := '0';
+        for ii in 2 downto 0 loop
+            v := v or p(ii).valid;
+        end loop;
+        return v;
+    end function;
+
+    function count(p : prefetch_pipeline_t) return natural is
+        variable v : natural := 0;
+    begin
+        v := 0;
+        for ii in 2 downto 0 loop
+            if (p(ii).valid = '1') then
+                v := v + 1;
+            end if;
+        end loop;
+        return v;
+    end function;
     
     type stall_buffer_t is record
         pc    : unsigned(31 downto 0);
@@ -113,337 +122,364 @@ architecture rtl of InstrPrefetcher is
         valid : std_logic;
     end record stall_buffer_t;
 
-    type prefetch_shift_t is array (0 to cNumTransactions - 1) of prefetch_request_t;
+    type stall_pipeline_t is array (0 to 2) of stall_buffer_t;
 
-    signal pc             : unsigned(29 downto 0) := (others => '0');
-    --signal prefetch       : prefetch_shift_t;
-    signal stalled        : stall_buffer_t;
+    function get_oldest(p : stall_pipeline_t) return integer is
+    begin
+        for ii in 2 downto 0 loop
+            if (p(ii).valid = '1') then
+                return ii;
+            end if;
+        end loop;
+        return -1;
+    end function;
+
+    function any(p : stall_pipeline_t) return std_logic is
+        variable v : std_logic := '0';
+    begin
+        v := '0';
+        for ii in 2 downto 0 loop
+            v := v or p(ii).valid;
+        end loop;
+        return v;
+    end function;
+
+    function count(p : stall_pipeline_t) return natural is
+        variable v : natural := 0;
+    begin
+        v := 0;
+        for ii in 2 downto 0 loop
+            if (p(ii).valid = '1') then
+                v := v + 1;
+            end if;
+        end loop;
+        return v;
+    end function;
+
+    type state_t is (RESET, RUNNING, JUMP);
+
+    signal pc      : unsigned(29 downto 0) := (others => '0');
+    signal valid_o : std_logic := '0';
     
-    signal instr_araddr  : std_logic_vector(31 downto 0) := (others => '0');
-    signal instr_arvalid : std_logic := '0';
-    signal instr_rready  : std_logic := '0';
+    signal cache_addr  : std_logic_vector(31 downto 0) := (others => '0');
+    signal cache_en    : std_logic := '0';
+    signal cache_wen   : std_logic_vector(cCachelineSize_B - 1 downto 0) := (others => '0');
+    signal cache_wdata : std_logic_vector(8 * cCachelineSize_B - 1 downto 0) := (others => '0');
+    signal cache_rdata : std_logic_vector(8 * cCachelineSize_B - 1 downto 0) := (others => '0');
+    signal cache_valid : std_logic := '0';
+
+    signal cache_ready : std_logic := '0';
+
+    signal mem_addr  : std_logic_vector(31 downto 0) := (others => '0');
+    signal mem_en    : std_logic := '0';
+    signal mem_wen   : std_logic_vector(cCachelineSize_B - 1 downto 0) := (others => '0');
+    signal mem_wdata : std_logic_vector(8 * cCachelineSize_B - 1 downto 0) := (others => '0');
+    signal mem_rdata : std_logic_vector(8 * cCachelineSize_B - 1 downto 0) := (others => '0');
+    signal mem_valid : std_logic := '0';
     
-    signal debug_num_prefetches : natural range 0 to cNumTransactions := 0;
-    signal debug_prefetches : prefetch_shift_t;
+    signal debug_prefetch : prefetch_pipeline_t;
+    signal debug_stalled  : stall_pipeline_t;
+    signal debug_state    : state_t;
 begin
-
-    o_instr_araddr  <= instr_araddr;
-    o_instr_arvalid <= instr_arvalid;
-    -- Hardcoding arprot for now.
-    o_instr_arprot  <= "000";
-
-    o_instr_rready <= instr_rready;
+    
+    o_valid <= valid_o;
 
     StateMachine: process(i_clk)
-        variable prefetch : prefetch_shift_t;
-        variable num_prefetches : natural range 0 to cNumTransactions := 0;
+        variable n : integer := 0;
+
+        variable prefetch : prefetch_pipeline_t;
+        variable stalled  : stall_pipeline_t;
+        variable state    : state_t := RESET;
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
-                instr_rready <= '0';
+                valid_o <= '0';
 
-                -- Indicate that the valid of both the stalled and prefetch
-                -- are no longer valid.
-                stalled.valid <= '0';
-                for ii in 0 to cNumTransactions - 1 loop
-                    prefetch(ii).valid := '0';
+                cache_en  <= '0';
+                cache_wen <= (others => '0');
+
+                for ii in 0 to 2 loop
+                    prefetch(ii).valid   := '0';
+                    prefetch(ii).dropped := '0';
+                    stalled(ii).valid    := '0';
                 end loop;
 
-                -- Clear the data busses to the processor
-                o_pc    <= (others => '0');
-                o_valid <= '0';
-
-                -- Clear the instruction address read bus
-                instr_araddr  <= (others => '0');
-                instr_arvalid <= '0';
+                state := RESET;
             else
+                o_ready <= bool2bit(state /= RESET);
+
+                -- In this process, state is a variable rather than a signal.
+                -- This allows us to isolate the different operations into 
+                -- different case statements, and also it allows us to interrupt
+                -- the state.
+
+                -- If there's a PC write, we need to go to the JUMP state.
+                -- This state handles the clearing of bits and management of other components.
                 if (i_pcwen = '1') then
-                    instr_rready <= '0';
-
-                    stalled.valid <= '0';
-
-                    pc <= i_pc(31 downto 2);
-                    assert i_pc(1 downto 0) = "00" 
-                        report "InstrPrefetcher::StateMachine: i_pc is not a multiple of 4." 
-                            severity cPcMisalignmentSeverity;
-
-                    o_valid <= '0';
-
-                    -- The comment that was here was decidedly ignorant of caches.
-                    if ((i_instr_arready and instr_arvalid) = '1') then
-                        -- Forward propagate prefetch
-                        for ii in cNumTransactions - 1 downto 1 loop
-                            prefetch(ii) := prefetch(ii - 1);
-                        end loop;
-
-                        prefetch(0).pc := pc & "00";
-                        prefetch(0).valid := '1';
-                        prefetch(0).dropped := '1';
-                        num_prefetches := num_prefetches + 1;
-                    end if;
-
-                    instr_araddr  <= std_logic_vector(i_pc(31 downto 2)) & "00";
-                    instr_arvalid <= '0';
-
-                    for ii in 0 to cNumTransactions - 1 loop
-                        prefetch(ii).dropped := '1';
-                    end loop;
-
-                    if ((i_instr_rvalid and instr_rready) = '1') then
-                        for ii in cNumTransactions - 1 downto 0 loop
-                            if (prefetch(ii).valid = '1') then
-                                -- In the rare case where a return comes in during a PC update, 
-                                -- all prefetches are already noted dropped, but the top
-                                -- valid one can just be invalidated.
-                                prefetch(ii).valid := '0';
-                                prefetch(ii).dropped := '0';
-                                num_prefetches := num_prefetches - 1;
-
-                                exit;
-                            end if;
-                        end loop;
-                    end if;
-                else
-                    -- If the processor is ready for new instructions, we're ready for new instructions,
-                    -- as long as there are no stalled instructions.
-                    instr_rready <= i_cpu_ready and not stalled.valid;
-    
-                    -------------------------------------------------------------------------------------
-                    --                           New Data Receipt Handling
-                    -------------------------------------------------------------------------------------
-                    -- Note: We're assuming the rresp is always OKAY.
-                    if ((i_instr_rvalid and instr_rready) = '1') then
-                        -- If we got new instruction data, we either have to hand it off to the processor,
-                        -- or hold onto it if we have a stalled instruction.
-
-                        ---------------------------------------------------------------------------------
-                        --                            CPU Ready To Accept
-                        ---------------------------------------------------------------------------------
-                        if (i_cpu_ready = '1') then
-                            -- If the processor is ready, and we have a stalled instruction, hand off the 
-                            -- stalled instruction and then grab the least recent prefetch and store it 
-                            -- with the new data in stalled.
-                            if (stalled.valid = '1') then
-                                -- Provide stalled instruction
-                                o_pc    <= stalled.pc;
-                                o_instr <= decode(stalled.instr);
-                                o_valid <= '1';
-    
-                                -- Move different instruction into stalled slot
-                                for ii in cNumTransactions - 1 downto 0 loop
-                                    if (prefetch(ii).valid = '1') then
-                                        stalled.pc    <= prefetch(ii).pc;
-                                        stalled.instr <= i_instr_rdata;
-                                        stalled.valid <= not prefetch(ii).dropped;
-    
-                                        exit;
-                                    end if;
-                                end loop;
-    
-                            else
-                                -- Otherwise, if we don't have an existing stalled instruction,
-                                -- we can just grab the deepest prefetch and give it to the CPU.
-
-                                -- Take deepest prefetch and provide it to CPU.
-                                for ii in cNumTransactions - 1 downto 0 loop
-                                    if (prefetch(ii).valid = '1') then
-                                        o_pc    <= prefetch(ii).pc;
-                                        o_instr <= decode(i_instr_rdata);
-                                        o_valid <= not prefetch(ii).dropped;
-    
-                                        -- Make sure to clear the valid flag of the prefetch
-                                        -- we grabbed since it is not guaranteed we will
-                                        -- remove this prefetch during forward propagation.
-                                        prefetch(ii).valid := '0';
-                                        num_prefetches := num_prefetches - 1;
-                                        exit;
-                                    end if;
-                                end loop;
-                            end if;
-                            
-                            -- Forward propagate prefetch
-                            for ii in cNumTransactions - 1 downto 1 loop
-                                if (prefetch(ii).valid = '0') then
-                                    prefetch(ii) := prefetch(ii - 1);
-                                    prefetch(ii - 1).valid := '0';
-                                end if;
-                            end loop;
-
-                            -- If the memory interface has accepted the latest request, that's great,
-                            -- add it to the prefetch. Otherwise, since we forward propagate regardless,
-                            -- fill the 0th slot with an empty prefetch slot.
-                            if ((i_instr_arready and instr_arvalid) = '1') then
-                                prefetch(0).pc      := pc & "00";
-                                prefetch(0).valid   := '1';
-                                prefetch(0).dropped := '0';
-
-                                num_prefetches := num_prefetches + 1;
-    
-                                -- Only when a prefetch has been accepted do we allow 
-                                -- both the PC and the araddr to update to the next PC.
-                                pc            <= pc + 1;
-                                instr_araddr  <= std_logic_vector(pc + 1) & "00";
-                                instr_arvalid <= '1';
-                            else    
-                                prefetch(0).pc      := pc & "00";
-                                prefetch(0).valid   := '0';
-                                prefetch(0).dropped := '0';
-
-                                instr_araddr  <= std_logic_vector(pc) & "00";
-                                instr_arvalid <= '1';
-                            end if;
-                        else
-                            ---------------------------------------------------------------------------------
-                            --                          CPU NOT Ready To Accept
-                            ---------------------------------------------------------------------------------
-
-                            -- Store it as a stalled instruction
-                            assert (stalled.valid = '0') report "InstrPrefetcher::StateMachine: stalled.valid " & 
-                                "is high when getting new instruction data and the CPU is stalled" severity failure;
-    
-                            -- Move deepest prefetch instruction into stalled slot
-                            for ii in cNumTransactions - 1 downto 0 loop
-                                if (prefetch(ii).valid = '1') then
-                                    stalled.pc    <= prefetch(ii).pc;
-                                    stalled.instr <= i_instr_rdata;
-                                    stalled.valid <= not prefetch(ii).dropped;
-
-                                    prefetch(ii).valid := '0';
-                                    num_prefetches := num_prefetches - 1;
-                                    exit;
-                                end if;
-                            end loop;
-
-                            -- Forward propagate prefetch
-                            for ii in cNumTransactions - 1 downto 1 loop
-                                if (prefetch(ii).valid = '0') then
-                                    prefetch(ii) := prefetch(ii - 1);
-                                    prefetch(ii - 1).valid := '0';
-                                end if;
-                            end loop;
-
-                            -- If we have prefetch slots, fill them.
-                            if (num_prefetches < cNumTransactions) then
-
-                                -- If the memory interface has accepted the latest request, that's great,
-                                -- add it to the prefetch. Otherwise, we have no need to update the prefetches.
-                                if ((i_instr_arready and instr_arvalid) = '1') then
-
-                                    -- Forward propagate prefetch
-                                    for ii in cNumTransactions - 1 downto 1 loop
-                                        if (prefetch(ii).valid = '0') then
-                                            prefetch(ii) := prefetch(ii - 1);
-                                            prefetch(ii - 1).valid := '0';
-                                        end if;
-                                    end loop;
-        
-                                    prefetch(0).pc      := pc & "00";
-                                    prefetch(0).valid   := '1';
-                                    prefetch(0).dropped := '0';
-                                    num_prefetches      := num_prefetches + 1;
-        
-                                    pc            <= pc + 1;
-                                    instr_araddr  <= std_logic_vector(pc + 1) & "00";
-                                    -- If we're about to run afoul of the maximum number of prefetches,
-                                    -- don't initiate another prefetch.
-                                    if (num_prefetches = cNumTransactions) then
-                                        instr_arvalid <= '0';
-                                    else
-                                        instr_arvalid <= '1';
-                                    end if;
-                                else
-                                    -- Like mentioned in the AXI spec, if we have a request, allow it to
-                                    -- sit until accepted.
-
-                                    instr_araddr  <= std_logic_vector(pc) & "00";
-                                    instr_arvalid <= '1';
-                                end if;
-                            else
-                                -- If we're about to run afoul of the maximum number of prefetches,
-                                -- don't initiate another prefetch.
-
-                                instr_araddr  <= std_logic_vector(pc) & "00";
-                                instr_arvalid <= '0';
-                            end if;
-                        end if;
-    
-                    else
-                        -------------------------------------------------------------------------------------
-                        --                       Waiting for Data Receipt Handling
-                        -------------------------------------------------------------------------------------
-
-
-                        -- If the CPU is ready, just go ahead and get rid of what's in the stalled registers.
-                        if (i_cpu_ready = '1') then
-                            o_valid <= '0';
-                            if (stalled.valid = '1') then
-                                -- Provide stalled instruction
-                                o_pc    <= stalled.pc;
-                                o_instr <= decode(stalled.instr);
-                                o_valid <= '1';
-
-                                stalled.valid <= '0';
-                            end if;
-                        end if;
-
-                        -- If we have prefetch slots, fill them.
-                        if (num_prefetches < cNumTransactions) then
-
-                            -- If the memory interface has accepted the latest request, that's great,
-                            -- add it to the prefetch. Otherwise, we have no need to update the prefetches.
-                            if ((i_instr_arready and instr_arvalid) = '1') then
-
-                                -- Forward propagate prefetch
-                                for ii in cNumTransactions - 1 downto 1 loop
-                                    if (prefetch(ii).valid = '0') then
-                                        prefetch(ii) := prefetch(ii - 1);
-                                        prefetch(ii - 1).valid := '0';
-                                    end if;
-                                end loop;
-    
-                                prefetch(0).pc      := pc & "00";
-                                prefetch(0).valid   := '1';
-                                prefetch(0).dropped := '0';
-                                num_prefetches      := num_prefetches + 1;
-    
-                                pc            <= pc + 1;
-                                instr_araddr  <= std_logic_vector(pc + 1) & "00";
-                                -- If we're about to run afoul of the maximum number of prefetches,
-                                -- don't initiate another prefetch.
-                                if (num_prefetches = cNumTransactions) then
-                                    instr_arvalid <= '0';
-                                else
-                                    instr_arvalid <= '1';
-                                end if;
-                            else
-                                -- Like mentioned in the AXI spec, if we have a request, allow it to
-                                -- sit until accepted.
-
-                                instr_araddr  <= std_logic_vector(pc) & "00";
-                                instr_arvalid <= '1';
-                            end if;
-                        else
-                            -- If we're about to run afoul of the maximum number of prefetches,
-                            -- don't initiate another prefetch.
-
-                            instr_araddr  <= std_logic_vector(pc) & "00";
-                            instr_arvalid <= '0';
-                        end if;
-                    end if;
+                    state := JUMP;
                 end if;
 
-                debug_prefetches <= prefetch;
-                debug_num_prefetches <= num_prefetches;
+                -- The case block below helps group the different lines of code into sections without having
+                -- to have nested IF loops, improving readability.
+                case state is
+                    when RESET =>
+                        -- We need to wait for the cache to reach a default state
+                        -- before we can start running.
+                        if (cache_ready = '1' or not cGenerateCache) then
+                            state := RUNNING;
+                        end if;
+                        
+                    when RUNNING =>
+                        -- Regardless of if the CPU is ready or not, we need to do some housekeeping.
+                        -- Clear any cache requests immediately so as to prevent reissuing a cache request,
+                        -- and clear any outgoing valid signals so as to prevent issuing another instruction.
+                        cache_en <= '0';
+                        valid_o  <= '0';
+
+                        -- If the CPU is ready for an instruction, issue one
+                        if (i_cpu_ready = '1') then
+                            -- If we have a stalled instruction, issue that first.
+                            if (any(stalled) = '1') then
+                                n := get_oldest(stalled);
+                                o_pc    <= stalled(n).pc;
+                                o_instr <= decode(stalled(n).instr);
+                                valid_o <= '1';
+
+                                -- Be sure to clear the valid signal indicating we've given away this instruction.
+                                stalled(n).valid := '0';
+
+                                if (any(prefetch) = '1' and cache_valid = '1') then
+                                    -- Store it as a stalled instruction
+                                    assert (count(stalled) < 3) report "InstrPrefetcher::StateMachine: stalled.valid " & 
+                                        "is high when getting new instruction data and the CPU is stalled" severity failure;
+
+                                    for ii in 2 downto 1 loop
+                                        stalled(ii) := stalled(ii - 1);
+                                    end loop;
+
+                                    n := get_oldest(prefetch);
+
+                                    stalled(0).pc    := prefetch(n).pc;
+                                    stalled(0).instr := cache_rdata(
+                                        8 * to_integer(prefetch(n).pc(clog2(cCachelineSize_B) - 1 downto 0)) + 31 downto
+                                        8 * to_integer(prefetch(n).pc(clog2(cCachelineSize_B) - 1 downto 0))
+                                    );
+                                    stalled(0).valid := not prefetch(n).dropped;
+
+                                    prefetch(n).valid := '0';
+                                end if;
+                            elsif (any(prefetch) = '1' and cache_valid = '1') then
+                                -- If we have an instruction we just got data back for, then issue that.
+                                n := get_oldest(prefetch);
+
+                                o_pc    <= prefetch(n).pc;
+                                o_instr <= decode(cache_rdata(
+                                    8 * to_integer(prefetch(n).pc(clog2(cCachelineSize_B) - 1 downto 0)) + 31 downto
+                                    8 * to_integer(prefetch(n).pc(clog2(cCachelineSize_B) - 1 downto 0))
+                                ));
+                                valid_o <= not prefetch(n).dropped;
+
+                                -- Be sure to clear the valid signal here as well.
+                                prefetch(n).valid := '0';
+                            end if;
+                        else
+                            -- If valid_o was set in the previous cycle, we need to keep it set until the cpu 
+                            -- accepts the new instruction.
+                            if (valid_o = '1') then
+                                valid_o <= '1';
+                            end if;
+
+                            if (any(prefetch) = '1' and cache_valid = '1') then
+                                -- Store it as a stalled instruction
+                                assert (count(stalled) < 3) report "InstrPrefetcher::StateMachine: stalled.valid " & 
+                                    "is high when getting new instruction data and the CPU is stalled" severity failure;
+
+                                for ii in 2 downto 1 loop
+                                    stalled(ii) := stalled(ii - 1);
+                                end loop;
+
+                                n := get_oldest(prefetch);
+
+                                stalled(0).pc    := prefetch(n).pc;
+                                stalled(0).instr := cache_rdata(
+                                    8 * to_integer(prefetch(n).pc(clog2(cCachelineSize_B) - 1 downto 0)) + 31 downto
+                                    8 * to_integer(prefetch(n).pc(clog2(cCachelineSize_B) - 1 downto 0))
+                                );
+                                stalled(0).valid := not prefetch(n).dropped;
+
+                                prefetch(n).valid := '0';
+                            end if;
+                        end if;
+
+                        -- If we have nothing currently waiting for data or to be sent to the processor, then 
+                        -- initiate a request. This means only one instruction in-flight at a time.
+                        if (((count(prefetch) + count(stalled)) < 3 and cache_ready = '1' and cGenerateCache) or 
+                                ((count(prefetch) + count(stalled)) < 1 and not cGenerateCache)) then
+                            cache_addr <= std_logic_vector(pc) & "00";
+                            cache_en   <= '1';
+
+                            for ii in 2 downto 1 loop
+                                prefetch(ii) := prefetch(ii - 1);
+                            end loop;
+
+                            prefetch(0).valid   := '1';
+                            prefetch(0).pc      := pc & "00";
+                            prefetch(0).dropped := '0';
+
+                            pc <= pc + 1;
+                        elsif (cache_en = '1' and cache_ready = '0' and cGenerateCache) then
+                            cache_en <= '1';
+                        end if;
+
+                    when JUMP =>
+                        -- When a jump occurs, any unissued instructions we've received data for are no
+                        -- longer valid.
+                        for ii in 0 to 2 loop
+                            stalled(ii).valid := '0';
+                        end loop;
+                        valid_o <= '0';
+
+                        -- However if we got data back when we just dropped the instruction, we
+                        -- can go ahead and clear the valid signal and the dropped signal.
+                        if (cache_valid = '1') then
+                            n := get_oldest(prefetch);
+                            prefetch(n).valid   := '0';
+                            prefetch(n).dropped := '0';
+                        end if;
+
+
+                        -- If we have an outstanding request, we still need to finish the transaction.
+                        -- Set the dropped bit here until we get the data back.
+                        for ii in 2 downto 0 loop
+                            if (prefetch(ii).valid = '1') then
+                                prefetch(ii).dropped := '1';
+                            end if;
+                        end loop;
+
+                        -- We also need to make sure the PC maintains its IALIGN32 compatibility.
+                        pc <= i_pc(31 downto 2);
+                        assert i_pc(1 downto 0) = "00" 
+                            report "InstrPrefetcher::StateMachine: i_pc is not a multiple of 4." 
+                                severity cPcMisalignmentSeverity;
+
+                        if (((count(prefetch) < 3) and cache_ready = '1' and cGenerateCache) or 
+                                ((count(prefetch)) < 1 and not cGenerateCache)) then
+                            -- If we were able to completely clear the prefetch, we can now
+                            -- issue a new request.
+                            cache_addr <= std_logic_vector(i_pc(31 downto 2)) & "00";
+                            cache_en   <= '1';
+
+                            for ii in 2 downto 1 loop
+                                prefetch(ii) := prefetch(ii - 1);
+                            end loop;
+
+                            prefetch(0).valid   := '1';
+                            prefetch(0).pc      := i_pc(31 downto 2) & "00";
+                            prefetch(0).dropped := '0';
+
+                            pc <= i_pc(31 downto 2) + 1;
+                        end if;
+
+                        -- After every jump, we can go straight back to RUNNING, because
+                        -- the point of this state is to handle the odd cases.
+                        state := RUNNING;
+                end case;
+                
             end if;
+
+            debug_prefetch <= prefetch;
+            debug_stalled  <= stalled;
+            debug_state    <= state;
         end if;
     end process StateMachine;
-
-    -- TODO: Integrate L1iCache here. L1iCache needs to do the following:
-    -- 1. Within a single CC, read a BRAM containing:
-    --      - valid bit
-    --      - tag
-    --      - cacheline
-    -- For the first iteration, use a direct mapped cache. 
-    -- Other cache architectures can be evaluated later.
     
+    gCache: if cGenerateCache generate
+
+        eCache : entity ndsmd_riscv.SimpleCache
+        generic map (
+            cAddressWidth_b    => 32,
+            cCacheType         => cCacheType,
+            cCachelineSize_B   => cCachelineSize_B,
+            cCacheSize_entries => cCacheSize_entries,
+            cCache_NumSets     => cCache_NumSets,
+            cNumCacheMasks     => cNumCacheMasks,
+            cCacheMasks        => cCacheMasks
+        ) port map (
+            i_clk    => i_clk,
+            i_resetn => i_resetn,
+
+            i_cache_addr   => cache_addr,
+            i_cache_en     => cache_en,
+            i_cache_wen    => cache_wen,
+            i_cache_wdata  => cache_wdata,
+            o_cache_rdata  => cache_rdata,
+            o_cache_valid  => cache_valid,
+
+            o_cache_ready => cache_ready,
+            o_cache_hit   => open,
+            o_cache_miss  => open,
+
+            o_mem_addr  => mem_addr,
+            o_mem_en    => mem_en,
+            o_mem_wen   => mem_wen,
+            o_mem_wdata => mem_wdata,
+            i_mem_rdata => mem_rdata,
+            i_mem_valid => mem_valid
+        );
+
+    else generate
+
+        mem_addr    <= cache_addr;
+        mem_en      <= cache_en;
+        mem_wen     <= cache_wen;
+        mem_wdata   <= cache_wdata;
+        cache_rdata <= mem_rdata;
+        cache_valid <= mem_valid;
+        
+    end generate gCache;
+
+    -- Hot take, but could we also integrate memory mapped peripherals
+    -- here? Specifically high performance ones, like timers and stuff that
+    -- would otherwise have to be placed on the AXI bus?
+
+    eBus2Axi : entity ndsmd_riscv.Bus2Axi
+    generic map (
+        cAddressWidth_b  => 32,
+        cCachelineSize_B => cCachelineSize_B
+    ) port map (
+        i_clk    => i_clk,
+        i_resetn => i_resetn,
+
+        i_bus_addr  => mem_addr,
+        i_bus_en    => mem_en,
+        i_bus_wen   => mem_wen,
+        i_bus_wdata => mem_wdata,
+        o_bus_rdata => mem_rdata,
+        o_bus_valid => mem_valid,
+
+        o_axi_awaddr  => open,
+        o_axi_awprot  => open,
+        o_axi_awvalid => open,
+        i_axi_awready => '0',
+
+        o_axi_wdata  => open,
+        o_axi_wstrb  => open,
+        o_axi_wvalid => open,
+        i_axi_wready => '0',
+
+        i_axi_bresp  => "00",
+        i_axi_bvalid => '0',
+        o_axi_bready => open,
+
+        o_axi_araddr  => o_instr_araddr,
+        o_axi_arprot  => o_instr_arprot,
+        o_axi_arvalid => o_instr_arvalid,
+        i_axi_arready => i_instr_arready,
+
+        i_axi_rdata  => i_instr_rdata,
+        i_axi_rresp  => i_instr_rresp,
+        i_axi_rvalid => i_instr_rvalid,
+        o_axi_rready => o_instr_rready
+    );
+
 end architecture rtl;

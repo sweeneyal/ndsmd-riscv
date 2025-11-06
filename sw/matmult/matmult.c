@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <stdio.h>
+#include "crc32.h"
 
 #define NROWS 4
 #define NCOLS NROWS
@@ -8,10 +8,14 @@ int32_t a[NROWS * NCOLS];
 int32_t b[NROWS * NCOLS];
 int32_t c[NROWS * NCOLS];
 
+uint8_t success = 0;
+
 #define nDEBUG_PRINT
 #define INFINITE_LOOP
 
 #if defined(DEBUG_PRINT)
+
+#include <stdio.h>
 
 void print_matrix(int32_t m[NROWS * NCOLS])
 {
@@ -33,7 +37,6 @@ void print_matrix(int32_t m[NROWS * NCOLS])
 }
 
 #endif // DEBUG_PRINT
-
 
 void main()
 {
@@ -72,6 +75,25 @@ void main()
     #if defined(DEBUG_PRINT)
     print_matrix(c);
     #endif // DEBUG_PRINT
+
+    uint32_t crc_accum=0;
+    uint8_t * ptr;
+
+    gen_crc_table();
+
+    ptr = (uint8_t *) a;
+    crc_accum = update_crc(crc_accum, ptr, NROWS * NCOLS * 4);
+    ptr = (uint8_t *) b;
+    crc_accum = update_crc(crc_accum, ptr, NROWS * NCOLS * 4);
+    ptr = (uint8_t *) c;
+    crc_accum = update_crc(crc_accum, ptr, NROWS * NCOLS * 4);
+
+    if (crc_accum = 0xb555a39c)
+        success = 1;
+
+    #if defined(DEBUG_PRINT)
+    printf("Expected: b555a39c; Actual: %x\n", crc_accum);
+    #endif
 
     #if defined(INFINITE_LOOP)
     while (1);

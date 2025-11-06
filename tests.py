@@ -35,12 +35,45 @@ files = get_vhdl_files('./hdl/tb', recursive=True)
 for file in files:
     tb.add_source_file(file)
 
-tb.test_bench("tb_InstrPrefetcher").scan_tests_from_file("./hdl/tb/InstrPrefetcher/InstrPrefetcher_Stimuli.vhd")
 tb.test_bench("tb_ControlEngine").scan_tests_from_file("./hdl/tb/ControlEngine/ControlEngine_Stimuli.vhd")
 tb.test_bench("tb_ProcessorCore").scan_tests_from_file("./hdl/tb/ProcessorCore/ProcessorCore_Stimuli.vhd")
 
 def encode(tb_cfg):
     return ", ".join(["%s:%s" % (key, str(tb_cfg[key])) for key in tb_cfg])
+
+tb_cfg = dict(
+    linesize_B = 4,
+    enabled    = False,
+    entries    = 1024,
+    numsets    = 1,
+    nummasks   = 1
+)
+tb_InstrPrefetcher = tb.test_bench('tb_InstrPrefetcher')
+tb_InstrPrefetcher.add_config(
+    name='cacheless_32b', 
+    generics=dict(
+        encoded_tb_cfg=encode(tb_cfg),
+        cachetype="Direct",
+        masks="FFFFFFFF"
+    )
+)
+
+tb_cfg = dict(
+    linesize_B = 16,
+    enabled    = True,
+    entries    = 1024,
+    numsets    = 1,
+    nummasks   = 1
+)
+tb_InstrPrefetcher = tb.test_bench('tb_InstrPrefetcher')
+tb_InstrPrefetcher.add_config(
+    name='cached_128b', 
+    generics=dict(
+        encoded_tb_cfg=encode(tb_cfg),
+        cachetype="DirectPiped",
+        masks="FFFFFFFF"
+    )
+)
 
 # Run vunit function
 vu.add_compile_option('ghdl.a_flags', ['-frelaxed'])

@@ -34,8 +34,22 @@ library ndsmd_riscv;
 
 entity Datapath is
     generic (
-        cMemoryUnit_AddressWidth_b  : natural := 32;
-        cMemoryUnit_CachelineSize_B : natural := 16;
+        -- the size of the cache line (aka cache block size)
+        cProcessor_CachelineSize_B : natural := 16;
+
+        -- whether or not to enable the L1d cache in the prefetcher
+        cL1dCache_Enabled : boolean := true;
+        -- what type of cache is used in the L1d cache (direct, set-assoc)
+        cL1dCache_CacheType : string := "Direct";
+        -- number of entries in the cache
+        cL1dCache_Size_entries : positive := 1024;
+        -- number of sets in the cache
+        cL1dCache_NumSets : positive := 1;
+        -- number of masks used to identify cacheable address ranges
+        cL1dCache_NumCacheMasks : positive := 1;
+        -- masks used to identify cacheable address ranges
+        cL1dCache_Masks : std_logic_matrix_t
+            (0 to cL1dCache_NumCacheMasks - 1)(31 downto 0) := (0 => x"0000FFFF");
 
         cMExtension_GenerateDivisionUnit : boolean := true;
 
@@ -58,7 +72,7 @@ entity Datapath is
 
         -- AXI-like interface to allow for easier implementation
         -- address bus for requesting an address
-        o_data_awaddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
+        o_data_awaddr : out std_logic_vector(31 downto 0);
         -- protection level of the transaction
         o_data_awprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -67,9 +81,9 @@ entity Datapath is
         i_data_awready : in std_logic;
 
         -- write data bus
-        o_data_wdata  : out std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
+        o_data_wdata  : out std_logic_vector(8 * cProcessor_CachelineSize_B - 1 downto 0);
         -- write data strobe
-        o_data_wstrb : out std_logic_vector(cMemoryUnit_CachelineSize_B - 1 downto 0);
+        o_data_wstrb : out std_logic_vector(cProcessor_CachelineSize_B - 1 downto 0);
         -- write valid
         o_data_wvalid : out std_logic;
         -- write ready
@@ -83,7 +97,7 @@ entity Datapath is
         o_data_bready : out std_logic;
 
         -- address bus for requesting an address
-        o_data_araddr : out std_logic_vector(cMemoryUnit_AddressWidth_b - 1 downto 0);
+        o_data_araddr : out std_logic_vector(31 downto 0);
         -- protection level of the transaction
         o_data_arprot : out std_logic_vector(2 downto 0);
         -- read enable signal indicating address bus request is valid
@@ -92,7 +106,7 @@ entity Datapath is
         i_data_arready : in std_logic;
 
         -- returned instruction data bus
-        i_data_rdata  : in std_logic_vector(8 * cMemoryUnit_CachelineSize_B - 1 downto 0);
+        i_data_rdata  : in std_logic_vector(8 * cProcessor_CachelineSize_B - 1 downto 0);
         -- response indicating error occurred, if any
         i_data_rresp : in std_logic_vector(1 downto 0);
         -- valid signal indicating that instruction data is valid
@@ -117,8 +131,8 @@ architecture rtl of Datapath is
     signal mext_valid : std_logic := '0';
 
     signal jalr_pc : unsigned(31 downto 0) := (others => '0');
-    signal pcwen : std_logic := '0';
-    signal pcout : unsigned(31 downto 0) := (others => '0');
+    signal pcwen   : std_logic := '0';
+    signal pcout   : unsigned(31 downto 0) := (others => '0');
 
     signal mem_res : std_logic_vector(31 downto 0) := (others => '0');
     signal mem_valid : std_logic := '0';
@@ -467,17 +481,16 @@ begin
     -- into AXI LITE transactions and then back into data for forwarding through the pipeline.
     eMemoryUnit : entity ndsmd_riscv.MemoryUnit
     generic map (
-        cAddressWidth_b  => cMemoryUnit_AddressWidth_b,
-        --cDataWidth_b     => 32,
-        cCachelineSize_B => cMemoryUnit_CachelineSize_B
+        cAddressWidth_b  => 32,
+        cCachelineSize_B => cProcessor_CachelineSize_B,
 
-        -- cGenerateCache     => true,
-        -- cCacheType         => "Direct",
-        -- cCacheSize_entries => 1024,
-        -- cCache_NumSets     => 1,
+        cGenerateCache     => cL1dCache_Enabled,
+        cCacheType         => cL1dCache_CacheType,
+        cCacheSize_entries => cL1dCache_Size_entries,
+        cCache_NumSets     => cL1dCache_NumSets,
         
-        -- cNumCacheMasks     => 1,
-        -- cCacheMasks        => (0 => x"0000FFFF")
+        cNumCacheMasks     => cL1dCache_NumCacheMasks,
+        cCacheMasks        => cL1dCache_Masks
     ) port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,

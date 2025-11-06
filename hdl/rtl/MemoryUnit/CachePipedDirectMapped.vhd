@@ -5,7 +5,7 @@ library ieee;
 library ndsmd_riscv;
     use ndsmd_riscv.CommonUtility.all;
 
-entity CacheDirectMapped is
+entity CachePipedDirectMapped is
     generic (
         cAddressWidth_b    : positive := 32;
         cCachelineSize_B   : positive := 16;
@@ -36,9 +36,9 @@ entity CacheDirectMapped is
         i_mem_rdata : in std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
         i_mem_valid : in std_logic
     );
-end entity CacheDirectMapped;
+end entity CachePipedDirectMapped;
 
-architecture rtl of CacheDirectMapped is
+architecture rtl of CachePipedDirectMapped is
     constant cCacheAddrWidth_b : positive := clog2(cCacheSize_entries);
     constant cUpperAddrWidth_b : positive := cAddressWidth_b - clog2(cCacheSize_entries) - clog2(cCachelineSize_B);
     constant cMetadataWidth_b  : positive := cUpperAddrWidth_b + 2;
@@ -63,45 +63,58 @@ architecture rtl of CacheDirectMapped is
         return m.valid & m.dirty & m.upper_address;
     end function;
 
+    type cache_status_t is record
+        is_hit       : std_logic;
+        is_write     : std_logic;
+        is_read      : std_logic;
+        is_cacheable : std_logic;
+    end record cache_status_t;
+
+    type cache_stage_t is record
+        access_enable  : std_logic;
+        write_enable   : std_logic_vector(cCachelineSize_B - 1 downto 0);
+        upper_addr     : std_logic_vector(cUpperAddrWidth_b - 1 downto 0);
+        cacheline_addr : std_logic_vector(cCacheAddrWidth_b - 1 downto 0);
+        wdata          : std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+        rdata          : std_logic_vector(8 * cCachelineSize_B - 1 downto 0);
+
+        status         : cache_status_t;
+    end record cache_stage_t;
+
+    type cache_pipeline_t is array (0 to 2) of cache_stage_t;
+    
+    constant cInputStage  : natural := 0;
+    constant cLookupStage : natural := 1;
+    constant cDataStage   : natural := 2;
+    constant cAccessStage : natural := 3;
+
+    signal cache_pipeline : cache_pipeline_t;
+    signal stall_bus : std_logic_vector(cAccessStage downto cInputStage) := (others => '0');
+
     signal cacheline_addr   : std_logic_vector(cCacheAddrWidth_b - 1 downto 0) := (others => '0');
     signal upper_memaddr    : std_logic_vector(cUpperAddrWidth_b - 1 downto 0) := (others => '0');
-    signal cache_en         : std_logic := '0';
+    signal is_cacheable     : std_logic := '0';
+
     signal cache_wen        : std_logic := '0';
     signal cache_rdata      : std_logic_vector(8 * cCachelineSize_B - 1 downto 0) := (others => '0');
-    signal cacheline_addr_b : std_logic_vector(cCacheAddrWidth_b - 1 downto 0) := (others => '0');
-    signal valid            : std_logic := '0';
     signal rdata            : std_logic_vector(8 * cCachelineSize_B - 1 downto 0) := (others => '0');
     signal meta_rdata       : std_logic_vector(cMetadataWidth_b - 1 downto 0) := (others => '0');
     signal meta_wdata       : std_logic_vector(cMetadataWidth_b - 1 downto 0) := (others => '0');
     signal metadata         : metadata_t(upper_address(cUpperAddrWidth_b - 1 downto 0));
     signal metadata_w       : metadata_t(upper_address(cUpperAddrWidth_b - 1 downto 0));
+
     signal is_read          : std_logic := '0';
     signal is_write         : std_logic := '0';
     signal is_hit           : std_logic := '0';
-    signal is_cacheable     : std_logic := '0';
     signal read_hit         : std_logic := '0';
     signal read_miss        : std_logic := '0';
     signal write_hit        : std_logic := '0';
     signal write_miss       : std_logic := '0';
+    signal write_valid      : std_logic := '0';
 
-    type state_t is (RESET, IDLE, REQUEST_MEM_READ, REQUEST_MEM_WRITE);
+    type state_t is (RESET, IDLE, REQUEST_MEM_READ, REQUEST_MEM_WRITE, DONE);
     signal state : state_t := RESET;
 
-    type cache_status_t is record
-        is_hit       : std_logic;
-        is_write     : std_logic;
-        is_cacheable : std_logic;
-    end record cache_status_t;
-
-    signal status : cache_status_t;
-
-    signal en_reg             : std_logic := '0';
-    signal wen_reg            : std_logic_vector(cCachelineSize_B - 1 downto 0) := (others => '0');
-    signal cacheline_addr_reg : std_logic_vector(cCacheAddrWidth_b - 1 downto 0) := (others => '0');
-    signal upper_addr_reg     : std_logic_vector(cUpperAddrWidth_b - 1 downto 0) := (others => '0');
-    signal cache_wdata_reg    : std_logic_vector(8 * cCachelineSize_B - 1 downto 0) := (others => '0');
-
-    signal write_valid : std_logic := '0';
 begin
     
     assert is_pow_of_2(cCachelineSize_B) and is_pow_of_2(cCacheSize_entries) 
@@ -114,6 +127,7 @@ begin
     upper_memaddr <= i_cache_addr(
         cAddressWidth_b - 1 downto clog2(cCacheSize_entries) + clog2(cCachelineSize_B));
 
+    -- Check the input address against all masks to see if it is cacheable
     MaskChecking: process(i_cache_addr)
         variable v : std_logic := '0';
     begin
@@ -124,10 +138,34 @@ begin
         is_cacheable <= v;
     end process MaskChecking;
 
-    -- Since we don't allow back-to-back accesses, we disallow that by filtering one cycle after.
-    cache_en  <= i_cache_en and bool2bit(state = IDLE);
-    -- Since we're not doing byte addressable caching, we just check if any of them need to be written.
-    cache_wen <= any(i_cache_wen) and is_cacheable;
+    -- We're stalled if the later stages have a stall, or if the input is not being used.
+    stall_bus(cInputStage) <= stall_bus(cLookupStage) or not i_cache_en;
+
+    InputCacheStage: process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_resetn = '0') then
+                cache_pipeline(0).access_enable <= '0';
+            else
+                if (stall_bus(cLookupStage downto cInputStage) = "00") then
+                    -- We're full steam ahead, since neither the later stages, nor the input are stalled.
+                    cache_pipeline(0).access_enable  <= i_cache_en;
+                    cache_pipeline(0).write_enable   <= i_cache_wen;
+                    cache_pipeline(0).cacheline_addr <= cacheline_addr;
+                    cache_pipeline(0).upper_addr     <= upper_memaddr;
+                    cache_pipeline(0).wdata          <= i_cache_wdata;
+                    cache_pipeline(0).status.is_cacheable <= is_cacheable;
+                elsif (stall_bus(cLookupStage downto cInputStage) = "01") then
+                    -- Since the input is stalled, but not the later stages, we need to clear this stage.
+                    cache_pipeline(0).access_enable       <= '0';
+                    cache_pipeline(0).status.is_cacheable <= is_cacheable;
+                end if;
+            end if;
+        end if;
+    end process InputCacheStage;
+
+    -- Now we do any writes depending on if there is supposed to be a write and the address is a cacheable.
+    cache_wen <= any(cache_pipeline(0).write_enable) and cache_pipeline(0).status.is_cacheable;
 
     eBram : entity ndsmd_riscv.DualPortBram
     generic map (
@@ -137,16 +175,16 @@ begin
     ) port map (
         i_clk => i_clk,
 
-        i_addra  => cacheline_addr,
-        i_ena    => cache_en,
+        i_addra  => cache_pipeline(0).cacheline_addr,
+        i_ena    => cache_pipeline(0).access_enable,
         i_wena   => cache_wen,
-        i_wdataa => i_cache_wdata,
+        i_wdataa => cache_pipeline(0).wdata,
         o_rdataa => cache_rdata,
 
-        i_addrb  => cacheline_addr_b,
+        i_addrb  => cache_pipeline(2).cacheline_addr,
         i_enb    => write_valid,
         i_wenb   => write_valid,
-        i_wdatab => rdata,
+        i_wdatab => cache_pipeline(2).rdata,
         o_rdatab => open
     );
 
@@ -158,125 +196,131 @@ begin
     ) port map (
         i_clk => i_clk,
 
-        i_addra  => cacheline_addr,
-        i_ena    => cache_en,
+        i_addra  => cache_pipeline(0).cacheline_addr,
+        i_ena    => cache_pipeline(0).access_enable,
         i_wena   => '0',
         i_wdataa => (others => '0'),
         o_rdataa => meta_rdata,
 
-        i_addrb  => cacheline_addr_b,
-        i_enb    => write_valid,
-        i_wenb   => write_valid,
+        i_addrb  => cache_pipeline(2).cacheline_addr,
+        i_enb    => cache_pipeline(2).access_enable,
+        i_wenb   => cache_pipeline(2).access_enable,
         i_wdatab => meta_wdata,
         o_rdatab => open
     );
 
-    metadata   <= slv_to_metadata(meta_rdata);
-    meta_wdata <= metadata_to_slv(metadata_w);
+    stall_bus(cLookupStage) <= stall_bus(cDataStage);
+
+    CacheStage1: process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_resetn = '0') then
+                cache_pipeline(1).access_enable <= '0';
+            else
+                if (stall_bus(cDataStage downto cLookupStage) = "00") then
+                    cache_pipeline(1) <= cache_pipeline(0);
+                elsif (stall_bus(1 downto 0) = "01") then
+                    cache_pipeline(1).access_enable <= '0';
+                end if;
+            end if;
+        end if;
+    end process CacheStage1;
 
     is_read <= bool2bit(
         -- we're accessing the bram
-        (en_reg = '1') and 
+        (cache_pipeline(1).access_enable = '1') and 
         -- but not writing anything
-        (any(wen_reg) = '0'));
+        (any(cache_pipeline(1).write_enable) = '0'));
 
     is_write <= bool2bit(
         -- we're accessing the bram
-        (en_reg = '1') and 
+        (cache_pipeline(1).access_enable = '1') and 
         -- and writing something
-        (any(wen_reg) = '1'));
+        (any(cache_pipeline(1).write_enable) = '1'));
 
     is_hit <= is_cacheable and bool2bit(
         -- and the data is valid
         (metadata.valid = '1') and
         -- and the address is the same 
-        (metadata.upper_address = upper_addr_reg));
+        (metadata.upper_address = cache_pipeline(1).upper_addr));
 
-    read_hit  <= is_read and is_hit;
-    read_miss <= is_read and not is_hit;
-
+    read_hit   <= is_read and is_hit;
+    read_miss  <= is_read and not is_hit;
     write_hit  <= is_write and is_hit;
     write_miss <= is_write and not is_hit;
 
     o_cache_hit  <= (read_hit or write_hit) and bool2bit(state = IDLE);
     o_cache_miss <= (read_miss or write_miss) and bool2bit(state = IDLE);
 
+    metadata   <= slv_to_metadata(meta_rdata);
+    meta_wdata <= metadata_to_slv(metadata_w);
+
     -- read hits take 1 cc, write hits take 2 cc because we have to write back to the cache
     -- misses take the penalty of the read or write side.
-    o_cache_valid <= valid or read_hit;
-    write_valid   <= valid and status.is_cacheable;
+    o_cache_valid <= cache_pipeline(2).access_enable or (read_hit and bool2bit(state = IDLE));
+    write_valid   <= cache_pipeline(2).access_enable and cache_pipeline(2).status.is_cacheable;
+
     -- This seems like a bad idea in terms of clocking.
-    DataMux: process(rdata, valid, cache_rdata)
+    DataMux: process(cache_pipeline(2).rdata, cache_pipeline(2).access_enable, cache_rdata)
     begin
-        if (valid = '1') then
-            o_cache_rdata <= rdata;
+        if (cache_pipeline(2).access_enable = '1') then
+            o_cache_rdata <= cache_pipeline(2).rdata;
         else
             o_cache_rdata <= cache_rdata;
         end if;
     end process DataMux;
 
-    o_cache_ready <= bool2bit(state=IDLE);
+    stall_bus(2) <= bool2bit(state /= IDLE);
 
-    StateMachine: process(i_clk)
+    o_cache_ready <= bool2bit(state = IDLE);
+
+    CacheStage2: process(i_clk)
     begin
         if rising_edge(i_clk) then
             if (i_resetn = '0') then
-                en_reg             <= '0';
-                wen_reg            <= (others => '0');
-                upper_addr_reg     <= (others => '0');
-                cacheline_addr_reg <= (others => '0');
-                cache_wdata_reg    <= (others => '0');
+                cache_pipeline(2).cacheline_addr <= (others => '0');
+                cache_pipeline(2).access_enable  <= '1';
+                metadata_w.dirty         <= '0';
+                metadata_w.valid         <= '0';
+                metadata_w.upper_address <= (others => '0');
 
-                -- Preserve the status so we know our state we need to transition to
-                status.is_write     <= '0';
-                status.is_hit       <= '0';
-                status.is_cacheable <= '0';
-                valid               <= '0';
+                o_mem_en <= '0';
             else
                 case state is
                     when RESET =>
-                        cacheline_addr_b         <= cacheline_addr_reg;
-                        valid                    <= '1';
+                        cache_pipeline(2).access_enable <= '1';
                         metadata_w.dirty         <= '0';
                         metadata_w.valid         <= '0';
                         metadata_w.upper_address <= (others => '0');
-                        if (unsigned(cacheline_addr_reg) < cCacheSize_entries - 1) then
-                            cacheline_addr_reg <= std_logic_vector(unsigned(cacheline_addr_reg) + 1);
+                        if (unsigned(cache_pipeline(2).cacheline_addr) < cCacheSize_entries - 1) then
+                            cache_pipeline(2).cacheline_addr <= 
+                                std_logic_vector(unsigned(cache_pipeline(2).cacheline_addr) + 1);
                         else
                             state <= IDLE;
                         end if;
-
-                    when IDLE =>
-                        o_cache_ready <= '1';
-
-                        -- preserve whether an access was performed
-                        en_reg             <= i_cache_en;
-                        -- preserve what bytes need to be written
-                        wen_reg            <= i_cache_wen;
-                        -- preserve what the metadata requires
-                        upper_addr_reg     <= upper_memaddr;
-                        -- preserve the cacheline so we know where to write to later
-                        cacheline_addr_reg <= cacheline_addr;
-                        -- preserve the write data in case we need it for writeback
-                        cache_wdata_reg    <= i_cache_wdata;
-
-                        -- Preserve the status so we know our state we need to transition to
-                        status.is_write     <= is_write;
-                        status.is_hit       <= is_hit;
-                        status.is_cacheable <= is_cacheable;
                         
-                        valid <= '0';
+                    when IDLE =>
+                        
+                        cache_pipeline(2) <= cache_pipeline(1);
+                        cache_pipeline(2).access_enable   <= '0';
+                        cache_pipeline(2).rdata           <= cache_rdata;
+                        cache_pipeline(2).status.is_hit   <= is_hit;
+                        cache_pipeline(2).status.is_write <= is_write;
+                        cache_pipeline(2).status.is_read  <= is_read;
 
                         if (write_miss = '1') then
+
                             -- If a write miss occurs, and its a cacheable element, we need to load
                             -- it into the cache.
-                            if (is_cacheable = '1') then
+                            if (cache_pipeline(1).status.is_cacheable = '1') then
                                 -- Check if the mapped cache location is dirty or not,
                                 -- and if so, we need to perform a memory write with the cache data.
                                 if (metadata.dirty = '1') then
                                     -- need to write memory, read memory, edit and writeback to cache while returning valid
                                     state       <= REQUEST_MEM_WRITE;
-                                    o_mem_addr  <= metadata.upper_address & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                    o_mem_addr  <= metadata.upper_address & 
+                                                    cache_pipeline(1).cacheline_addr & 
+                                                    (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                     o_mem_en    <= '1';
                                     o_mem_wen   <= (others => '1');
                                     o_mem_wdata <= cache_rdata;
@@ -284,7 +328,9 @@ begin
                                     -- Otherwise, we can simply drop the cache data and 
                                     -- overwrite it with a memory read.
                                     state      <= REQUEST_MEM_READ;
-                                    o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                    o_mem_addr <= cache_pipeline(1).upper_addr & 
+                                                    cache_pipeline(1).cacheline_addr & 
+                                                    (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                     o_mem_en   <= '1';
                                     o_mem_wen  <= (others => '0');
                                 end if;
@@ -292,44 +338,45 @@ begin
                                 -- However, if we're uncacheable, then it doesn't matter if the corresponding location is dirty or not.
                                 -- We need to just write to memory.
                                 state       <= REQUEST_MEM_WRITE;
-                                o_mem_addr  <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                o_mem_addr  <= cache_pipeline(1).upper_addr & 
+                                                    cache_pipeline(1).cacheline_addr &
+                                                    (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                 o_mem_en    <= '1';
-                                o_mem_wen   <= wen_reg;
-                                o_mem_wdata <= cache_wdata_reg;
+                                o_mem_wen   <= cache_pipeline(1).write_enable;
+                                o_mem_wdata <= cache_pipeline(1).wdata;
                             end if;
 
                         elsif (write_hit = '1') then
                             -- If we have a write hit, this means we do not have an uncacheable.
                             -- Therefore, we need to read cache, edit and writeback to cache while 
                             -- returning valid.
-                            en_reg <= '0';
-                            state  <= IDLE;
+                            state <= IDLE;
                             for ii in 0 to cCachelineSize_B - 1 loop
-                                if (wen_reg(ii) = '1') then
-                                    rdata(8 * ii + 7 downto 8 * ii) <= cache_wdata_reg(8 * ii + 7 downto 8 * ii);
+                                if (cache_pipeline(1).write_enable(ii) = '1') then
+                                    cache_pipeline(2).rdata(8 * ii + 7 downto 8 * ii) <= cache_pipeline(1).wdata(8 * ii + 7 downto 8 * ii);
                                 else
-                                    rdata(8 * ii + 7 downto 8 * ii) <= cache_rdata(8 * ii + 7 downto 8 * ii);
+                                    cache_pipeline(2).rdata(8 * ii + 7 downto 8 * ii) <= cache_rdata(8 * ii + 7 downto 8 * ii);
                                 end if;
                             end loop;
 
-                            cacheline_addr_b <= cacheline_addr_reg;
-                            valid            <= '1';
                             metadata_w.dirty <= '1';
                             metadata_w.valid <= '1';
-                            metadata_w.upper_address <= upper_addr_reg;
+                            metadata_w.upper_address <= cache_pipeline(1).upper_addr;
+                            cache_pipeline(2).access_enable <= '1';
                         elsif (read_hit = '1') then
                             -- If we have a read hit, we do not have an uncacheable and otherwise
                             -- nothing changes.
-                            en_reg <= '0';
                             state  <= IDLE;
                         elsif (read_miss = '1') then
-                            if (is_cacheable = '1') then
+                            if (cache_pipeline(1).status.is_cacheable = '1') then
                                 -- If we have a cacheable read miss, once again we need to check if the 
                                 -- location we're replacing is dirty, and if so, then we need to perform a write.
                                 if (metadata.dirty = '1') then
                                     -- need to write memory, read memory, then writeback to cache while returning valid
                                     state       <= REQUEST_MEM_WRITE;
-                                    o_mem_addr  <= metadata.upper_address & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                    o_mem_addr  <= metadata.upper_address & 
+                                                    cache_pipeline(1).cacheline_addr & 
+                                                    (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                     o_mem_en    <= '1';
                                     o_mem_wen   <= (others => '1');
                                     o_mem_wdata <= cache_rdata;
@@ -337,38 +384,44 @@ begin
                                     -- Otherwise, we can simply drop the cache data and 
                                     -- overwrite it with a memory read.
                                     state      <= REQUEST_MEM_READ;
-                                    o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                    o_mem_addr <= cache_pipeline(1).upper_addr & 
+                                                    cache_pipeline(1).cacheline_addr & 
+                                                    (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                     o_mem_en   <= '1';
                                     o_mem_wen  <= (others => '0');
                                 end if;
                             else
                                 -- If we have an uncacheable read miss, we need to complete the request as follows.
                                 state      <= REQUEST_MEM_READ;
-                                o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                o_mem_addr <= cache_pipeline(1).upper_addr & 
+                                                    cache_pipeline(1).cacheline_addr & 
+                                                    (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                 o_mem_en   <= '1';
                                 o_mem_wen  <= (others => '0');
                             end if;
                         end if;
-                
-                    when REQUEST_MEM_WRITE =>
+
+                    when REQUEST_MEM_WRITE => 
                         o_mem_en <= '0';
                         if (i_mem_valid = '1') then
                             -- Once memory responds, if we're cacheable we will request a read.
                             -- This is because to get to this state, a read or write miss occurred with
                             -- a dirty mapping so we needed to write the dirty data before we could read 
                             -- the clean data.
-                            if (status.is_cacheable = '1') then
+                            if (cache_pipeline(2).status.is_cacheable = '1') then
                                 -- Now we need to request a mem read using the registered original request.
                                 state      <= REQUEST_MEM_READ;
-                                o_mem_addr <= upper_addr_reg & cacheline_addr & (clog2(cCachelineSize_B) - 1 downto 0 => '0');
+                                o_mem_addr <= cache_pipeline(2).upper_addr & 
+                                                cache_pipeline(2).cacheline_addr & 
+                                                (clog2(cCachelineSize_B) - 1 downto 0 => '0');
                                 o_mem_en   <= '1';
                                 o_mem_wen  <= (others => '0');
                             else
                                 -- If we are not cacheable, we requested a write because of a write "miss".
                                 -- Therefore, we're done because we did the operation as requested.
 
-                                rdata <= (others => '0');
-                                valid <= '1';
+                                cache_pipeline(2).rdata <= (others => '0');
+                                cache_pipeline(2).access_enable <= '1';
                                 state <= IDLE;
                             end if;
                         end if;
@@ -380,33 +433,29 @@ begin
                             -- necessary cacheable data, otherwise it will continue to be passed back
                             -- to the processor.
                             for ii in 0 to cCachelineSize_B - 1 loop
-                                if (wen_reg(ii) = '1') then
-                                    rdata(8 * ii + 7 downto 8 * ii) <= cache_wdata_reg(8 * ii + 7 downto 8 * ii);
+                                if (cache_pipeline(2).write_enable(ii) = '1') then
+                                    cache_pipeline(2).rdata(8 * ii + 7 downto 8 * ii) <= cache_pipeline(2).wdata(8 * ii + 7 downto 8 * ii);
                                 else
-                                    rdata(8 * ii + 7 downto 8 * ii) <= i_mem_rdata(8 * ii + 7 downto 8 * ii);
+                                    cache_pipeline(2).rdata(8 * ii + 7 downto 8 * ii) <= i_mem_rdata(8 * ii + 7 downto 8 * ii);
                                 end if;
                             end loop;
                             
-                            cacheline_addr_b <= cacheline_addr_reg;
-                            valid            <= '1';
-                            metadata_w.dirty <= any(wen_reg);
+                            cache_pipeline(2).access_enable <= '1';
+                            metadata_w.dirty <= any(cache_pipeline(2).write_enable);
                             metadata_w.valid <= '1';
-                            metadata_w.upper_address <= upper_addr_reg;
+                            metadata_w.upper_address <= cache_pipeline(2).upper_addr;
 
-                            en_reg <= '0';
-                            state <= IDLE;
+                            state <= DONE;
                         end if;
 
-                    -- when DONE =>
-                    --     -- Additional cycle since enables are maintained high as input into
-                    --     -- this module, which means we can accidentally initiate multiple accesses
-                    --     -- inappropriately back to back.
-                    --     valid <= '0';
-                    --     state <= IDLE;
-
+                    when DONE =>
+                        cache_pipeline(2).access_enable <= '0';
+                        state <= IDLE;
+                        
+                    
                 end case;
             end if;
         end if;
-    end process StateMachine;
+    end process CacheStage2;
     
 end architecture rtl;

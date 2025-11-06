@@ -23,11 +23,11 @@ library osvvm;
 library ndsmd_riscv;
     use ndsmd_riscv.CommonUtility.all;
 
-entity tb_CacheDirectMapped is
+entity tb_CachePipedDirectMapped is
     generic (runner_cfg : string);
-end entity tb_CacheDirectMapped;
+end entity tb_CachePipedDirectMapped;
 
-architecture tb of tb_CacheDirectMapped is
+architecture tb of tb_CachePipedDirectMapped is
     constant cPeriod : time := 10 ns;
     constant cAddressWidth_b    : positive := 32;
     constant cCachelineSize_B   : positive := 16;
@@ -57,7 +57,7 @@ begin
 
     CreateClock(clk=>clk, period=>cPeriod);
 
-    eDut : entity ndsmd_riscv.CacheDirectMapped
+    eDut : entity ndsmd_riscv.CachePipedDirectMapped
     generic map (
         cAddressWidth_b    => cAddressWidth_b,
         cCachelineSize_B   => cCachelineSize_B,
@@ -114,14 +114,19 @@ begin
                     wait until rising_edge(clk);
                     wait for 100 ps;
 
-                    check(cache_miss = '1');
+                    cache.en <= '0';
+
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+                    
+                    check(cache_miss = '1', "Miss should be 1");
 
                     wait until rising_edge(clk);
                     wait for 100 ps;
 
-                    check(cache_miss = '0');
+                    check(cache_miss = '0', "Miss should be 0");
+                    check(memory.en = '1', "We should be requesting data");
                     check(memory.addr = cache.addr);
-                    check(memory.en   = cache.en);
                     check(memory.wen  = cache.wen);
                     
                     memory.rdata <= std_logic_vector(to_unsigned(ii, 8 * cCachelineSize_B));
@@ -142,6 +147,12 @@ begin
 
                 info("Demonstration of read hit behavior.");
                 for ii in 0 to cCacheSize_entries - 1 loop
+                    if ii >= 2 then
+                        check(cache_miss = '0');
+                        check(cache_hit = '1');
+                        check(cache.rdata = std_logic_vector(to_unsigned(ii - 2, 8 * cCachelineSize_B)));
+                        check(cache.valid = '1');
+                    end if;
                     cache.addr  <= std_logic_vector(to_unsigned(ii * cCachelineSize_B, cAddressWidth_b));
                     cache.en    <= '1';
                     cache.wen   <= (others => '0');
@@ -149,36 +160,40 @@ begin
 
                     wait until rising_edge(clk);
                     wait for 100 ps;
-
-                    check(cache_miss = '0');
-                    check(cache_hit = '1');
-                    check(cache.rdata = std_logic_vector(to_unsigned(ii, 8 * cCachelineSize_B)));
-                    check(cache.valid = '1');
-                    cache.en <= '0';
-
-                    wait until rising_edge(clk);
-                    wait for 100 ps;
                 end loop;
+
+                cache.en <= '0';
+                check(cache_miss = '0');
+                check(cache_hit = '1');
+                check(cache.rdata = std_logic_vector(to_unsigned(cCacheSize_entries - 2, 8 * cCachelineSize_B)));
+                check(cache.valid = '1');
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
+                check(cache_miss = '0');
+                check(cache_hit = '1');
+                check(cache.rdata = std_logic_vector(to_unsigned(cCacheSize_entries - 1, 8 * cCachelineSize_B)));
+                check(cache.valid = '1');
+
+                wait until rising_edge(clk);
+                wait for 100 ps;
 
                 info("Demonstration of write hit behavior.");
                 for ii in 0 to cCacheSize_entries - 1 loop
+                    if (ii >= 3) then
+                        check(cache.rdata = std_logic_vector(to_unsigned(ii - 3, 8 * cCachelineSize_B)));
+                        check(cache.valid = '1');
+                    end if;
+
+                    if (ii >= 2) then
+                        check(cache_miss = '0');
+                        check(cache_hit = '1');
+                    end if;
+
                     cache.addr  <= std_logic_vector(to_unsigned(ii * cCachelineSize_B, cAddressWidth_b));
                     cache.en    <= '1';
                     cache.wen   <= (others => '1');
                     cache.wdata <= std_logic_vector(to_unsigned(ii, 8 * cCachelineSize_B));
-
-                    wait until rising_edge(clk);
-                    wait for 100 ps;
-
-                    check(cache_miss = '0');
-                    check(cache_hit = '1');
-
-                    wait until rising_edge(clk);
-                    wait for 100 ps;
-
-                    check(cache.rdata = std_logic_vector(to_unsigned(ii, 8 * cCachelineSize_B)));
-                    check(cache.valid = '1');
-                    cache.en <= '0';
 
                     wait until rising_edge(clk);
                     wait for 100 ps;
@@ -190,6 +205,11 @@ begin
                     cache.en    <= '1';
                     cache.wen   <= (others => '1');
                     cache.wdata <= std_logic_vector(to_unsigned(ii, 8 * cCachelineSize_B));
+
+                    wait until rising_edge(clk);
+                    wait for 100 ps;
+
+                    cache.en <= '0';
 
                     wait until rising_edge(clk);
                     wait for 100 ps;
@@ -396,5 +416,7 @@ begin
     
         test_runner_cleanup(runner);
     end process;
+
+    test_runner_watchdog(runner, 2 ms);
     
 end architecture tb;

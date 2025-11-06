@@ -1,6 +1,6 @@
 
 # Compiles matmult.c
-riscv32-unknown-elf-gcc matmult.c -nostdlib -march=rv32imafd  -T ../sim/sim.ld -o matmult.elf
+riscv32-unknown-elf-gcc matmult.c crc32.h crc32.c -nostdlib -march=rv32imafd  -T ../sim/sim.ld -o matmult.elf
 
 # Dumps the disassembly of the elf file
 riscv32-unknown-elf-objdump -d matmult.elf > matmult.asm
