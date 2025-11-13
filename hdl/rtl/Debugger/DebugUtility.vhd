@@ -10,6 +10,15 @@ package DebugUtility is
     constant cDmi     : std_logic_vector(4 downto 0) := "10001";
     constant cBypass1 : std_logic_vector(4 downto 0) := "11111";
 
+    -- Constant sizes for the DREG field according to Debug Spec
+    constant cIdcode_size : positive := 32;
+    constant cDtmcs_size  : positive := 32;
+    constant cDmi_size    : positive := 41;
+    constant cBypass_size : positive := 1;
+
+    constant cDtmHardReset_bit : natural := 17;
+    constant cDmiReset_bit     : natural := 16;
+
     type idcode_t is record
         version : std_logic_vector(3 downto 0);
         partno  : std_logic_vector(15 downto 0);
@@ -123,6 +132,23 @@ package DebugUtility is
         sbaccess8       : std_logic;
     end record sbcs_t;
 
-    type dmi_op_t is (IDLE);
+    type dmi_op_t is (NULL_OP, READ_OP, WRITE_OP);
+    function to_op(s : std_logic_vector(1 downto 0)) return dmi_op_t;
 
 end package DebugUtility;
+
+package body DebugUtility is
+    
+    function to_op(s : std_logic_vector(1 downto 0)) return dmi_op_t is
+    begin
+        case s is
+            when "00" => return NULL_OP;
+            when "01" => return READ_OP;
+            when "10" => return WRITE_OP;
+            when others => 
+                assert false report "DebugUtility::to_op: Invalid input" severity error;
+                return NULL_OP;
+        end case;
+    end function;
+    
+end package body DebugUtility;
