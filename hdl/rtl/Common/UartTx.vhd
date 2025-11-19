@@ -60,6 +60,7 @@ begin
                             txDataReg <= '1' & i_byte & '0';
                             state     <= LOAD_BIT;
                         end if;
+                        
                     when LOAD_BIT =>
                         o_tx  <= txDataReg(bitIndex);
                         state <= SEND_BIT;

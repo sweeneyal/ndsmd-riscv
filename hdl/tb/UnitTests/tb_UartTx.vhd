@@ -17,9 +17,10 @@ entity tb_UartTx is
 end entity tb_UartTx;
 
 architecture rtl of tb_UartTx is
-    procedure OpenLoopTransmit (
+    procedure ReceiveData (
         signal Clock             : in  std_logic;
-        signal Tx                : in  std_logic;
+        signal Rx                : in  std_logic;
+        variable Data            : in  std_logic_vector(7 downto 0);
         signal TxData            : out std_logic_vector(7 downto 0);
         signal Send              : out std_logic;
         signal TxReady           : in std_logic;
@@ -32,41 +33,26 @@ architecture rtl of tb_UartTx is
         variable vTxData       : std_logic_vector(7 downto 0);
     begin
         assert (TxReady = '1') report "WARNING: TxReady needs to be 1 at startup." severity warning;
-        assert (Tx = '1')      report "ERROR: Tx needs to be 1 at startup." severity error;
+        assert (Rx = '1')      report "ERROR: Tx needs to be 1 at startup." severity error;
         wait for 4.5 * cBitPeriod;
         assert (TxReady = '1') report "WARNING: TxReady needs to be 1 at startup." severity warning;
-        assert (Tx = '1')      report "ERROR: Tx needs to be 1 at startup." severity error;
-        vTxData := "10101010";
-        TxData <= vTxData;
+        assert (Rx = '1')      report "ERROR: Tx needs to be 1 at startup." severity error;
+        vTxData := Data;
+        TxData <= Data;
         Send   <= '1';
         wait until rising_edge(Clock);
         wait for 1.5 * cClockPeriod;
         Send   <= '0';
-        assert (Tx = '0') report "ERROR: Start bit needs to be 0" severity error;
-        wait for cBitPeriod + cClockPeriod; -- Depending on the baud rate, the extra clock period included here is a rounding error.
+        wait for 0.5 * cBitPeriod + cClockPeriod; -- Depending on the baud rate, the extra clock period included here is a rounding error.
+        assert (Rx = '0') report "ERROR: Start bit needs to be 0" severity error;
         for ii in 0 to 7 loop
-            assert (Tx = vTxData(ii)) report "ERROR: Tx did not match expected: " &
-                std_logic'image(vTxData(ii)) & " Actual: " & std_logic'image(Tx) severity warning;
             wait for cBitPeriod + cClockPeriod; -- Depending on the baud rate, the extra clock period included here is a rounding error.
+            assert (Rx = vTxData(ii)) report "ERROR: Tx did not match expected: " &
+                std_logic'image(vTxData(ii)) & " Actual: " & std_logic'image(Rx) severity warning;
         end loop;
-        assert (Tx = '1') report "ERROR: Stop bit needs to be 1" severity error;
+        wait for cBitPeriod + cClockPeriod; -- Depending on the baud rate, the extra clock period included here is a rounding error.
+        assert (Rx = '1') report "ERROR: Stop bit needs to be 1" severity error;
         wait for cBitPeriod;
-    end procedure;
-
-    procedure Nominal_TransmitByte(
-        signal Clock             : in  std_logic;
-        signal Tx                : in  std_logic;
-        signal TxData            : out std_logic_vector(7 downto 0);
-        signal Send              : out std_logic;
-        signal TxReady           : in  std_logic;
-        constant cClockFrequency : in  natural;
-        constant cClockPeriod    : in  time;
-        constant cUartBaudRate   : in  natural
-    ) is
-    begin
-        OpenLoopTransmit(Clock=>Clock, Tx=>Tx, TxData=>TxData, 
-            Send=>Send, TxReady=>TxReady, cClockFrequency=>cClockFrequency,
-            cClockPeriod=>cClockPeriod, cUartBaudRate=>cUartBaudRate);
     end procedure;
 
     signal clk     : std_logic := '0';
@@ -99,6 +85,7 @@ begin
     txReady <= not busy;
 
     Stimuli: process
+        variable data : std_logic_vector(7 downto 0) := (others => '0');
     begin
         test_runner_setup(runner, runner_cfg);
         while test_suite loop
@@ -108,20 +95,25 @@ begin
                 resetn <= '1';
                 wait until rising_edge(clk);
 
-                Nominal_TransmitByte(
-                    Clock           => clk,
-                    Tx              => tx,
-                    TxData          => byte,
-                    Send            => valid,
-                    TxReady         => txReady,
-                    cClockFrequency => 100e6,
-                    cClockPeriod    => 10 ns,
-                    cUartBaudRate   => 115200
-                );
+                for ii in 0 to 255 loop
+                    data := std_logic_vector(to_unsigned(ii, 8));
+
+                    ReceiveData(
+                        Clock           => clk,
+                        Data            => data,
+                        Rx              => tx,
+                        TxData          => byte,
+                        Send            => valid,
+                        TxReady         => txReady,
+                        cClockFrequency => 100e6,
+                        cClockPeriod    => 10 ns,
+                        cUartBaudRate   => 115200
+                    );
+                end loop;
             end if;
         end loop;
         test_runner_cleanup(runner);
     end process Stimuli;
 
-    test_runner_watchdog(runner, 10 ms);
+    test_runner_watchdog(runner, 35 ms);
 end architecture rtl;
