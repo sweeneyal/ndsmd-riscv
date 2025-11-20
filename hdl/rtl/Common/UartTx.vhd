@@ -65,7 +65,7 @@ begin
                         o_tx  <= txDataReg(bitIndex);
                         state <= SEND_BIT;
                         bitIndex := bitIndex + 1;
-                        bitTimer := cClocksPerBit;
+                        bitTimer := cClocksPerBit - 1;
 
                     when SEND_BIT =>
                         if (bitTimer > 0) then
