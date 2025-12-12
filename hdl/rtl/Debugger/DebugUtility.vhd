@@ -69,6 +69,7 @@ package DebugUtility is
     type dmcontrol_t is record
         haltreq         : std_logic;
         resumereq       : std_logic;
+        hartreset       : std_logic;
         ackhavereset    : std_logic;
         ackunavail      : std_logic;
         hasel           : std_logic;
