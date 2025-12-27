@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: ControlEngine
 --
--- library: ndsmd_riscv
+-- library: nsfrtu_riscv
 -- 
 -- signals:
 --      i_clk    : system clock frequency
@@ -27,10 +27,10 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
     
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
-    use ndsmd_riscv.DatapathUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
+    use nsfrtu_riscv.DatapathUtility.all;
 
 entity MExtension is
     generic (
@@ -63,7 +63,7 @@ architecture rtl of MExtension is
     signal rem_res   : std_logic_vector(31 downto 0) := (others => '0');
 begin
     
-    eMultiplier : entity ndsmd_riscv.MultiplierUnit
+    eMultiplier : entity nsfrtu_riscv.MultiplierUnit
     port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,
@@ -89,7 +89,7 @@ begin
     signed_enum <= bool2bit(i_decoded.operation = DIVIDE or i_decoded.operation = REMAINDER);
 
     gGenerateDivisionUnit: if (cEnableDivisionUnit) generate
-        eDivider : entity ndsmd_riscv.DivisionUnit
+        eDivider : entity nsfrtu_riscv.DivisionUnit
         port map (
             i_clk    => i_clk,
             i_resetn => i_resetn,

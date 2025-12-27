@@ -9,8 +9,8 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
 
 entity tb_BarrelShift is
     generic (runner_cfg : string);
@@ -24,7 +24,7 @@ architecture tb of tb_BarrelShift is
     signal res_o   : std_logic_vector(31 downto 0) := (others => '0');
 begin
     
-    eDut : entity ndsmd_riscv.BarrelShift
+    eDut : entity nsfrtu_riscv.BarrelShift
     port map (
         i_right => right_i,
         i_arith => arith_i,

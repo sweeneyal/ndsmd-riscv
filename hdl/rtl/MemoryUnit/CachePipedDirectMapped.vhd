@@ -2,8 +2,8 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
 
 entity CachePipedDirectMapped is
     generic (
@@ -167,7 +167,7 @@ begin
     -- Now we do any writes depending on if there is supposed to be a write and the address is a cacheable.
     cache_wen <= any(cache_pipeline(0).write_enable) and cache_pipeline(0).status.is_cacheable;
 
-    eBram : entity ndsmd_riscv.DualPortBram
+    eBram : entity nsfrtu_riscv.DualPortBram
     generic map (
         cAddressWidth_b => cCacheAddrWidth_b,
         cMaxAddress     => 2 ** cCacheAddrWidth_b,
@@ -188,7 +188,7 @@ begin
         o_rdatab => open
     );
 
-    eMetadata : entity ndsmd_riscv.DualPortBram
+    eMetadata : entity nsfrtu_riscv.DualPortBram
     generic map (
         cAddressWidth_b => cCacheAddrWidth_b,
         cMaxAddress     => 2 ** cCacheAddrWidth_b,

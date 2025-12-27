@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: tb_InstrPrefetcher
 --
--- library: tb_ndsmd_riscv
+-- library: tb_nsfrtu_riscv
 -- 
 -- generics:
 --      runner_cfg : configuration string for Vunit
@@ -20,13 +20,13 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
-    use ndsmd_riscv.ZicsrUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
+    use nsfrtu_riscv.ZicsrUtility.all;
 
-library tb_ndsmd_riscv;
-    use tb_ndsmd_riscv.ZiCsr_Utility.all;
+library tb_nsfrtu_riscv;
+    use tb_nsfrtu_riscv.ZiCsr_Utility.all;
 
 entity Tb_ZiCsr is
     generic (runner_cfg : string);
@@ -754,7 +754,7 @@ begin
         test_runner_cleanup(runner);
     end process;
     
-    eDut : entity ndsmd_riscv.ZiCsr
+    eDut : entity nsfrtu_riscv.ZiCsr
     generic map (
         cTrapBaseAddress => x"FFFF0000"
     ) port map (

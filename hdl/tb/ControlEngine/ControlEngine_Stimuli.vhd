@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: InstrPrefetcher_Stimuli
 --
--- library: tb_ndsmd_riscv
+-- library: tb_nsfrtu_riscv
 -- 
 -- signals:
 --      o_stimuli   : 
@@ -23,14 +23,14 @@ library osvvm;
     
 library simtools;
     
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
-    use ndsmd_riscv.DatapathUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
+    use nsfrtu_riscv.DatapathUtility.all;
 
-library tb_ndsmd_riscv;
-    use tb_ndsmd_riscv.ControlEngine_Utility.all;
-    use tb_ndsmd_riscv.RiscvUtility.all;
+library tb_nsfrtu_riscv;
+    use tb_nsfrtu_riscv.ControlEngine_Utility.all;
+    use tb_nsfrtu_riscv.RiscvUtility.all;
 
 entity ControlEngine_Stimuli is
     generic (nested_runner_cfg : string);

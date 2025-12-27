@@ -2,9 +2,9 @@ library ieee;
     use ieee.numeric_std.all;
     use ieee.std_logic_1164.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.DebugUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.DebugUtility.all;
 
 entity DebugTransportModule is
     generic (

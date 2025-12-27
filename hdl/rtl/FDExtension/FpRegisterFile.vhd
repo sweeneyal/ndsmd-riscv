@@ -2,8 +2,8 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
 
 entity FpRegisterFile is
     port (

@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: ControlEngine
 --
--- library: ndsmd_riscv
+-- library: nsfrtu_riscv
 -- 
 -- signals:
 --      i_clk    : system clock frequency
@@ -27,10 +27,10 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
-    use ndsmd_riscv.DatapathUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
+    use nsfrtu_riscv.DatapathUtility.all;
 
 entity IntegerAlu is
     port (
@@ -96,7 +96,7 @@ begin
 
     arith_enum <= bool2bit(i_decoded.operation = SHIFT_RA);
 
-    eShift : entity ndsmd_riscv.BarrelShift
+    eShift : entity nsfrtu_riscv.BarrelShift
     port map (
         i_right  => right_enum,
         i_arith  => arith_enum,

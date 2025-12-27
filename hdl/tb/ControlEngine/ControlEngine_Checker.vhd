@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: InstrPrefetcher_Checker
 --
--- library: tb_ndsmd_riscv
+-- library: tb_nsfrtu_riscv
 -- 
 -- signals:
 --      i_stimuli   : 
@@ -19,8 +19,8 @@ library ieee;
 
 library simtools;
 
-library tb_ndsmd_riscv;
-    use tb_ndsmd_riscv.ControlEngine_Utility.all;
+library tb_nsfrtu_riscv;
+    use tb_nsfrtu_riscv.ControlEngine_Utility.all;
 
 entity ControlEngine_Checker is
     port (

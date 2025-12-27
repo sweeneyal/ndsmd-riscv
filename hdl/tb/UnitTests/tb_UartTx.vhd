@@ -10,7 +10,7 @@ library ieee;
 library osvvm;
     use osvvm.TbUtilPkg.all;
 
-library ndsmd_riscv;
+library nsfrtu_riscv;
 
 entity tb_UartTx is
     generic(runner_cfg : string);
@@ -69,7 +69,7 @@ begin
         period => 10 ns
     );
 
-    eDut : entity ndsmd_riscv.UartTx 
+    eDut : entity nsfrtu_riscv.UartTx 
     generic map(
         cClockFrequency_Hz => 100e6,
         cBaudRate_bps      => 115200

@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: ControlEngine
 --
--- library: ndsmd_riscv
+-- library: nsfrtu_riscv
 -- 
 -- signals:
 --      i_clk    : system clock frequency
@@ -27,10 +27,10 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
 
-entity NdsmdRv32 is
+entity NsfrtuRv32 is
     generic (
         -------------------------------------------------------------------------
         -- Processor Configuration Generics
@@ -181,12 +181,12 @@ entity NdsmdRv32 is
         -- ready to receive instruction data
         m_axi_data_rready : out std_logic
     );
-end entity NdsmdRv32;
+end entity NsfrtuRv32;
 
-architecture rtl of NdsmdRv32 is
+architecture rtl of NsfrtuRv32 is
 begin
     
-    eCore : entity ndsmd_riscv.ProcessorCore
+    eCore : entity nsfrtu_riscv.ProcessorCore
     generic map (
         cProcessor_CachelineSize_B       => cProcessor_CachelineSize_B,
 

@@ -9,9 +9,9 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.DebugUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.DebugUtility.all;
 
 entity tb_DebugTransportModule is
     generic (runner_cfg : string);
@@ -198,7 +198,7 @@ begin
 
     CreateClock(clk=>clk, period=>5 ns);
     
-    eDut : entity ndsmd_riscv.DebugTransportModule 
+    eDut : entity nsfrtu_riscv.DebugTransportModule 
     generic map (
         cIdcode_Version => x"1",
         cIdcode_PartId  => x"0001",

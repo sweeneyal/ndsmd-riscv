@@ -2,8 +2,8 @@ library ieee;
     use ieee.numeric_std.all;
     use ieee.std_logic_1164.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
 
 package ZicsrUtility is
 

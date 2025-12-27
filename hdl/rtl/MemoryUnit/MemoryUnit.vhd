@@ -2,10 +2,10 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
-    use ndsmd_riscv.DatapathUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
+    use nsfrtu_riscv.DatapathUtility.all;
 
 entity MemoryUnit is
     generic (
@@ -341,7 +341,7 @@ begin
 
     gCache: if cGenerateCache generate
 
-        eCache : entity ndsmd_riscv.SimpleCache
+        eCache : entity nsfrtu_riscv.SimpleCache
         generic map (
             cCacheType         => cCacheType,
             cAddressWidth_b    => cAddressWidth_b,
@@ -387,7 +387,7 @@ begin
     -- here? Specifically high performance ones, like timers and stuff that
     -- would otherwise have to be placed on the AXI bus?
 
-    eBus2Axi : entity ndsmd_riscv.Bus2Axi
+    eBus2Axi : entity nsfrtu_riscv.Bus2Axi
     generic map (
         cAddressWidth_b => cAddressWidth_b,
         cCachelineSize_B => cCachelineSize_B

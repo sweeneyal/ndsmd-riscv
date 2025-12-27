@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: ProcessorCore_Stimuli
 --
--- library: tb_ndsmd_riscv
+-- library: tb_nsfrtu_riscv
 -- 
 -- signals:
 --      o_stimuli   : 
@@ -22,14 +22,14 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
 
 library simtools;
 
-library tb_ndsmd_riscv;
-    use tb_ndsmd_riscv.ProcessorCore_Utility.all;
-    use tb_ndsmd_riscv.RiscvUtility.all;
+library tb_nsfrtu_riscv;
+    use tb_nsfrtu_riscv.ProcessorCore_Utility.all;
+    use tb_nsfrtu_riscv.RiscvUtility.all;
 
 entity ProcessorCore_Stimuli is
     generic (nested_runner_cfg : string);

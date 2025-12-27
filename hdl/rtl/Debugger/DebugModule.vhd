@@ -2,8 +2,8 @@ library ieee;
     use ieee.numeric_std.all;
     use ieee.std_logic_1164.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.DebugUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.DebugUtility.all;
 
 entity DebugModule is
     port (
@@ -230,48 +230,41 @@ begin
                     sbdata0     => (others => '0')
                 );
             else
-                case reg_state is
-                    when IDLE =>
-                        if (i_dmi_en = '1') then
-                            case "0" & i_dmi_addr is
-                                when x"10" =>
-                                    -- dmcontrol
-                                when x"11" =>
-                                    -- dmstatus
-                                when x"12" =>
-                                    -- hartinfo
-                                when x"13" =>
-                                    -- haltsum1
-                                when x"16" =>
-                                    -- abstractcs
-                                when x"17" =>
-                                    -- command
-                                when x"18" =>
-                                    -- abstractauto
-                                when x"19" =>
-                                    -- confstrptr0
-                                when x"20" =>
-                                    -- progbuf0
-                                when x"21" =>
-                                    -- progbuf1
-                                when x"30" =>
-                                    -- authdata
-                                when x"38" =>
-                                    -- sbcs
-                                when x"39" =>
-                                    -- sbaddress0
-                                when x"3c" =>
-                                    -- sbdata0
-                                when others =>
-                                    -- all others are not yet implemented
-                            
-                            end case;
-                        end if;
-                
-                    when others =>
-                        
-                
-                end case;
+                if (i_dmi_en = '1') then
+                    case "0" & i_dmi_addr is
+                        when x"10" =>
+                            -- dmcontrol
+                        when x"11" =>
+                            -- dmstatus
+                        when x"12" =>
+                            -- hartinfo
+                        when x"13" =>
+                            -- haltsum1
+                        when x"16" =>
+                            -- abstractcs
+                        when x"17" =>
+                            -- command
+                        when x"18" =>
+                            -- abstractauto
+                        when x"19" =>
+                            -- confstrptr0
+                        when x"20" =>
+                            -- progbuf0
+                        when x"21" =>
+                            -- progbuf1
+                        when x"30" =>
+                            -- authdata
+                        when x"38" =>
+                            -- sbcs
+                        when x"39" =>
+                            -- sbaddress0
+                        when x"3c" =>
+                            -- sbdata0
+                        when others =>
+                            -- all others are not yet implemented
+                    
+                    end case;
+                end if;
             end if;
         end if;
     end process StateMachine;

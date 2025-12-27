@@ -9,8 +9,8 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
 
 entity tb_DivisionUnit is
     generic (runner_cfg : string);
@@ -32,7 +32,7 @@ begin
     
     CreateClock(clk=>clk, period=>5 ns);
 
-    eDut : entity ndsmd_riscv.DivisionUnit
+    eDut : entity nsfrtu_riscv.DivisionUnit
     port map (
         i_clk    => clk,
         i_resetn => resetn,

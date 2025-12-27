@@ -2,8 +2,8 @@ library ieee;
     use ieee.numeric_std.all;
     use ieee.std_logic_1164.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;    
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;    
 
 entity ByteAddrBram is
     generic (
@@ -42,7 +42,7 @@ begin
     
     gGenerateBrams: for g_ii in 0 to cWordWidth_B - 1 generate
         
-        eByteBram : entity ndsmd_riscv.DualPortBram
+        eByteBram : entity nsfrtu_riscv.DualPortBram
         generic map (
             cAddressWidth_b => cAddressWidth_b - cCachelineIndexWidth_b,
             cMaxAddress     => cMaxAddress/4,

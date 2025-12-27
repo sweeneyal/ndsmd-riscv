@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: tb_InstrPrefetcher
 --
--- library: tb_ndsmd_riscv
+-- library: tb_nsfrtu_riscv
 -- 
 -- generics:
 --      runner_cfg : configuration string for Vunit
@@ -16,12 +16,12 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.InstructionUtility.all;
-    use ndsmd_riscv.DatapathUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.InstructionUtility.all;
+    use nsfrtu_riscv.DatapathUtility.all;
 
-library tb_ndsmd_riscv;
-    use tb_ndsmd_riscv.ControlEngine_Utility.all;
+library tb_nsfrtu_riscv;
+    use tb_nsfrtu_riscv.ControlEngine_Utility.all;
 
 entity tb_ControlEngine is
     generic (runner_cfg : string);
@@ -44,7 +44,7 @@ begin
     -- downstream processor and that we do not miss an instruction/use a
     -- dropped instruction.
 
-    eStimuli : entity tb_ndsmd_riscv.ControlEngine_Stimuli
+    eStimuli : entity tb_nsfrtu_riscv.ControlEngine_Stimuli
     generic map (
         nested_runner_cfg => runner_cfg
     ) port map (
@@ -52,7 +52,7 @@ begin
         i_responses => responses
     );
     
-    eDut : entity ndsmd_riscv.ControlEngine
+    eDut : entity nsfrtu_riscv.ControlEngine
     port map (
         i_clk    => stimuli.clk,
         i_resetn => stimuli.resetn,
@@ -67,7 +67,7 @@ begin
         i_pcwen  => '0'
     );
 
-    eChecker : entity tb_ndsmd_riscv.ControlEngine_Checker
+    eChecker : entity tb_nsfrtu_riscv.ControlEngine_Checker
     port map (
         i_stimuli   => stimuli,
         i_responses => responses

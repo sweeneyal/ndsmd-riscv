@@ -2,8 +2,8 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
 
 entity CacheSetAssociative is
     generic (
@@ -155,7 +155,7 @@ begin
     gSetAssociative: for g_ii in 0 to cCache_NumSets - 1 generate
 
         -- Generate a pair of BRAMs and metadata BRAMs for each set.
-        eBram : entity ndsmd_riscv.DualPortBram
+        eBram : entity nsfrtu_riscv.DualPortBram
         generic map (
             cAddressWidth_b => cCacheAddrWidth_b,
             cMaxAddress     => 2 ** cCacheAddrWidth_b,
@@ -181,7 +181,7 @@ begin
             o_rdatab => open
         );
     
-        eMetadata : entity ndsmd_riscv.DualPortBram
+        eMetadata : entity nsfrtu_riscv.DualPortBram
         generic map (
             cAddressWidth_b => cCacheAddrWidth_b,
             cMaxAddress     => 2 ** cCacheAddrWidth_b,

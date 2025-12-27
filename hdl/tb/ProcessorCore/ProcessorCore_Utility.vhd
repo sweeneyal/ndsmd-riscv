@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: ProcessorCore_Utility
 --
--- library: tb_ndsmd_riscv
+-- library: tb_nsfrtu_riscv
 -- 
 -- signals:
 --      i_stimuli   : 
@@ -15,8 +15,8 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.InstructionUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.InstructionUtility.all;
 
 package ProcessorCore_Utility is
     

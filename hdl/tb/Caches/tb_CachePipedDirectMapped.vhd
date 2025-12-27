@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: tb_CacheDirectMapped
 --
--- library: tb_ndsmd_riscv
+-- library: tb_nsfrtu_riscv
 -- 
 -- generics:
 --      runner_cfg : configuration string for Vunit
@@ -20,8 +20,8 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
 
 entity tb_CachePipedDirectMapped is
     generic (runner_cfg : string);
@@ -57,7 +57,7 @@ begin
 
     CreateClock(clk=>clk, period=>cPeriod);
 
-    eDut : entity ndsmd_riscv.CachePipedDirectMapped
+    eDut : entity nsfrtu_riscv.CachePipedDirectMapped
     generic map (
         cAddressWidth_b    => cAddressWidth_b,
         cCachelineSize_B   => cCachelineSize_B,

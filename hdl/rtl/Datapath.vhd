@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: ControlEngine
 --
--- library: ndsmd_riscv
+-- library: nsfrtu_riscv
 -- 
 -- signals:
 --      i_clk    : system clock frequency
@@ -27,10 +27,10 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
-    use ndsmd_riscv.DatapathUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
+    use nsfrtu_riscv.DatapathUtility.all;
 
 entity Datapath is
     generic (
@@ -208,7 +208,7 @@ begin
     -- the value on o_opA and o_opB are the values expected for the instruction being issued on
     -- i_issued.
     -- Furthermore, the registers are only updated at the end of the writeback retirement stage.
-    eRegisters : entity ndsmd_riscv.RegisterFile
+    eRegisters : entity nsfrtu_riscv.RegisterFile
     port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,
@@ -261,7 +261,7 @@ begin
     -- into a final alu_out result.
     -- Additional, the eq_res (indicating opA and opB are equal) is always provided but only used during branch
     -- math.
-    eAlu : entity ndsmd_riscv.IntegerAlu
+    eAlu : entity nsfrtu_riscv.IntegerAlu
     port map (
         i_decoded => i_issued.instr,
         i_opA     => opA,
@@ -281,7 +281,7 @@ begin
     -- This unit is clocked, and thus will cause pipeline stalls if used.
     -- The multiplier is technically pipelined, but the division unit is very much not pipelined.
     -- Additional support for pipelining the multiplier would need to be added.
-    eMext : entity ndsmd_riscv.MExtension
+    eMext : entity nsfrtu_riscv.MExtension
     generic map(
         cEnableDivisionUnit => cMExtension_GenerateDivisionUnit
     ) port map (
@@ -479,7 +479,7 @@ begin
 
     -- The first logical unit following execute is the MemoryUnit. This translates read/write instructions
     -- into AXI LITE transactions and then back into data for forwarding through the pipeline.
-    eMemoryUnit : entity ndsmd_riscv.MemoryUnit
+    eMemoryUnit : entity nsfrtu_riscv.MemoryUnit
     generic map (
         cAddressWidth_b  => 32,
         cCachelineSize_B => cProcessor_CachelineSize_B,
@@ -553,7 +553,7 @@ begin
     -- $ MRET: This formally completes the interrupt process. When MRET enters the pipeline, the PC updates
     --         immediately, however it is only after this instruction is executed in ZiCsr that new interrupts
     --         can occur. (WIP)
-    eZiCsr : entity ndsmd_riscv.ZiCsr
+    eZiCsr : entity nsfrtu_riscv.ZiCsr
     generic map (
         cTrapBaseAddress => cZiCsr_TrapBaseAddress
     ) port map (

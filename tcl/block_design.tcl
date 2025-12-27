@@ -40,7 +40,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 
 # The design that will be created by this Tcl script contains the following 
 # module references:
-# Debouncer, SimpleRom, ByteAddrBram, ByteAddrBram, NdsmdRv32
+# Debouncer, SimpleRom, ByteAddrBram, ByteAddrBram, NsfrtuRv32
 
 # Please add the sources of those modules before sourcing this Tcl script.
 
@@ -164,7 +164,7 @@ Debouncer\
 SimpleRom\
 ByteAddrBram\
 ByteAddrBram\
-NdsmdRv32\
+NsfrtuRv32\
 "
 
    set list_mods_missing ""
@@ -323,7 +323,7 @@ proc create_root_design { parentCell } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
-    set_property CONFIG.cRomFileName {/home/asweeney/Projects/FPGA/ndsmd-riscv/sw/coe/matmult.data} $SimpleRom_0
+    set_property CONFIG.cRomFileName {/home/asweeney/Projects/FPGA/nsfrtu-riscv/sw/coe/matmult.data} $SimpleRom_0
 
 
   # Create instance: ByteAddrBram_0, and set properties
@@ -366,34 +366,34 @@ proc create_root_design { parentCell } {
   ] $ila_2
 
 
-  # Create instance: NdsmdRv32_0, and set properties
-  set block_name NdsmdRv32
-  set block_cell_name NdsmdRv32_0
-  if { [catch {set NdsmdRv32_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+  # Create instance: NsfrtuRv32_0, and set properties
+  set block_name NsfrtuRv32
+  set block_cell_name NsfrtuRv32_0
+  if { [catch {set NsfrtuRv32_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
-   } elseif { $NdsmdRv32_0 eq "" } {
+   } elseif { $NsfrtuRv32_0 eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
     set_property -dict [list \
     CONFIG.cMemoryUnit_CachelineSize_B {4} \
     CONFIG.cPrefetch_NumTransactions {1} \
-  ] $NdsmdRv32_0
+  ] $NsfrtuRv32_0
 
 
   set_property -dict [ list \
    CONFIG.FREQ_HZ {75000000} \
- ] [get_bd_intf_pins /NdsmdRv32_0/m_axi_data]
+ ] [get_bd_intf_pins /NsfrtuRv32_0/m_axi_data]
 
   set_property -dict [ list \
    CONFIG.FREQ_HZ {75000000} \
- ] [get_bd_intf_pins /NdsmdRv32_0/m_axi_instr]
+ ] [get_bd_intf_pins /NsfrtuRv32_0/m_axi_instr]
 
   # Create interface connections
-  connect_bd_intf_net -intf_net NdsmdRv32_0_m_axi_data [get_bd_intf_pins NdsmdRv32_0/m_axi_data] [get_bd_intf_pins axi_interconnect_0/S00_AXI]
-connect_bd_intf_net -intf_net [get_bd_intf_nets NdsmdRv32_0_m_axi_data] [get_bd_intf_pins NdsmdRv32_0/m_axi_data] [get_bd_intf_pins ila_1/SLOT_0_AXI]
-  connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins axi_interconnect_1/S00_AXI] [get_bd_intf_pins NdsmdRv32_0/m_axi_instr]
+  connect_bd_intf_net -intf_net NsfrtuRv32_0_m_axi_data [get_bd_intf_pins NsfrtuRv32_0/m_axi_data] [get_bd_intf_pins axi_interconnect_0/S00_AXI]
+connect_bd_intf_net -intf_net [get_bd_intf_nets NsfrtuRv32_0_m_axi_data] [get_bd_intf_pins NsfrtuRv32_0/m_axi_data] [get_bd_intf_pins ila_1/SLOT_0_AXI]
+  connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins axi_interconnect_1/S00_AXI] [get_bd_intf_pins NsfrtuRv32_0/m_axi_instr]
 connect_bd_intf_net -intf_net [get_bd_intf_nets S00_AXI_1] [get_bd_intf_pins axi_interconnect_1/S00_AXI] [get_bd_intf_pins ila_0/SLOT_0_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_pins axi_interconnect_0/M00_AXI] [get_bd_intf_pins axi_bram_ctrl_0/S_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_0_M01_AXI [get_bd_intf_pins axi_uartlite_0/S_AXI] [get_bd_intf_pins axi_interconnect_0/M01_AXI]
@@ -403,11 +403,11 @@ connect_bd_intf_net -intf_net [get_bd_intf_nets S00_AXI_1] [get_bd_intf_pins axi
   # Create port connections
   connect_bd_net -net ByteAddrBram_0_o_rdataa [get_bd_pins ByteAddrBram_0/o_rdataa] [get_bd_pins axi_bram_ctrl_0/bram_rddata_a]
   connect_bd_net -net ByteAddrBram_1_o_rdataa [get_bd_pins ByteAddrBram_1/o_rdataa] [get_bd_pins axi_bram_ctrl_2/bram_rddata_a]
-  connect_bd_net -net Debouncer_0_o_sig [get_bd_pins Debouncer_0/o_sig] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_0/M01_ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_uartlite_0/s_axi_aresetn] [get_bd_pins axi_bram_ctrl_1/s_axi_aresetn] [get_bd_pins axi_bram_ctrl_2/s_axi_aresetn] [get_bd_pins axi_interconnect_0/M02_ARESETN] [get_bd_pins NdsmdRv32_0/i_resetn]
-  connect_bd_net -net NdsmdRv32_0_o_dbg_pc [get_bd_pins NdsmdRv32_0/o_dbg_pc] [get_bd_pins ila_2/probe0]
-  connect_bd_net -net NdsmdRv32_0_o_dbg_rd [get_bd_pins NdsmdRv32_0/o_dbg_rd] [get_bd_pins ila_2/probe1]
-  connect_bd_net -net NdsmdRv32_0_o_dbg_rdwen [get_bd_pins NdsmdRv32_0/o_dbg_rdwen] [get_bd_pins ila_2/probe2]
-  connect_bd_net -net NdsmdRv32_0_o_dbg_res [get_bd_pins NdsmdRv32_0/o_dbg_res] [get_bd_pins ila_2/probe3]
+  connect_bd_net -net Debouncer_0_o_sig [get_bd_pins Debouncer_0/o_sig] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_0/M01_ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_uartlite_0/s_axi_aresetn] [get_bd_pins axi_bram_ctrl_1/s_axi_aresetn] [get_bd_pins axi_bram_ctrl_2/s_axi_aresetn] [get_bd_pins axi_interconnect_0/M02_ARESETN] [get_bd_pins NsfrtuRv32_0/i_resetn]
+  connect_bd_net -net NsfrtuRv32_0_o_dbg_pc [get_bd_pins NsfrtuRv32_0/o_dbg_pc] [get_bd_pins ila_2/probe0]
+  connect_bd_net -net NsfrtuRv32_0_o_dbg_rd [get_bd_pins NsfrtuRv32_0/o_dbg_rd] [get_bd_pins ila_2/probe1]
+  connect_bd_net -net NsfrtuRv32_0_o_dbg_rdwen [get_bd_pins NsfrtuRv32_0/o_dbg_rdwen] [get_bd_pins ila_2/probe2]
+  connect_bd_net -net NsfrtuRv32_0_o_dbg_res [get_bd_pins NsfrtuRv32_0/o_dbg_res] [get_bd_pins ila_2/probe3]
   connect_bd_net -net SimpleRom_0_o_data [get_bd_pins SimpleRom_0/o_data] [get_bd_pins axi_bram_ctrl_1/bram_rddata_a]
   connect_bd_net -net axi_bram_ctrl_0_bram_addr_a [get_bd_pins axi_bram_ctrl_0/bram_addr_a] [get_bd_pins ByteAddrBram_0/i_addra]
   connect_bd_net -net axi_bram_ctrl_0_bram_clk_a [get_bd_pins axi_bram_ctrl_0/bram_clk_a] [get_bd_pins ByteAddrBram_0/i_clk]
@@ -423,16 +423,16 @@ connect_bd_intf_net -intf_net [get_bd_intf_nets S00_AXI_1] [get_bd_intf_pins axi
   connect_bd_net -net axi_bram_ctrl_2_bram_we_a [get_bd_pins axi_bram_ctrl_2/bram_we_a] [get_bd_pins ByteAddrBram_1/i_wena]
   connect_bd_net -net axi_bram_ctrl_2_bram_wrdata_a [get_bd_pins axi_bram_ctrl_2/bram_wrdata_a] [get_bd_pins ByteAddrBram_1/i_wdataa]
   connect_bd_net -net axi_uartlite_0_tx [get_bd_pins axi_uartlite_0/tx] [get_bd_ports tx]
-  connect_bd_net -net clk_wiz_clk_out1 [get_bd_pins clk_wiz/clk_out1] [get_bd_pins Debouncer_0/i_clk] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_1/s_axi_aclk] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_0/M01_ACLK] [get_bd_pins axi_uartlite_0/s_axi_aclk] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins ila_0/clk] [get_bd_pins ila_1/clk] [get_bd_pins axi_bram_ctrl_2/s_axi_aclk] [get_bd_pins axi_interconnect_0/M02_ACLK] [get_bd_pins ila_2/clk] [get_bd_pins NdsmdRv32_0/i_clk]
+  connect_bd_net -net clk_wiz_clk_out1 [get_bd_pins clk_wiz/clk_out1] [get_bd_pins Debouncer_0/i_clk] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_1/s_axi_aclk] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_0/M01_ACLK] [get_bd_pins axi_uartlite_0/s_axi_aclk] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins ila_0/clk] [get_bd_pins ila_1/clk] [get_bd_pins axi_bram_ctrl_2/s_axi_aclk] [get_bd_pins axi_interconnect_0/M02_ACLK] [get_bd_pins ila_2/clk] [get_bd_pins NsfrtuRv32_0/i_clk]
   connect_bd_net -net resetn_1 [get_bd_ports resetn] [get_bd_pins Debouncer_0/i_sig]
   connect_bd_net -net rx_1 [get_bd_ports rx] [get_bd_pins axi_uartlite_0/rx]
   connect_bd_net -net sysclk_1 [get_bd_ports sysclk] [get_bd_pins clk_wiz/clk_in1]
 
   # Create address segments
-  assign_bd_address -offset 0x00004000 -range 0x00004000 -target_address_space [get_bd_addr_spaces NdsmdRv32_0/m_axi_data] [get_bd_addr_segs axi_bram_ctrl_0/S_AXI/Mem0] -force
-  assign_bd_address -offset 0xFFFFC000 -range 0x00004000 -target_address_space [get_bd_addr_spaces NdsmdRv32_0/m_axi_data] [get_bd_addr_segs axi_bram_ctrl_2/S_AXI/Mem0] -force
-  assign_bd_address -offset 0x00010000 -range 0x00010000 -target_address_space [get_bd_addr_spaces NdsmdRv32_0/m_axi_data] [get_bd_addr_segs axi_uartlite_0/S_AXI/Reg] -force
-  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces NdsmdRv32_0/m_axi_instr] [get_bd_addr_segs axi_bram_ctrl_1/S_AXI/Mem0] -force
+  assign_bd_address -offset 0x00004000 -range 0x00004000 -target_address_space [get_bd_addr_spaces NsfrtuRv32_0/m_axi_data] [get_bd_addr_segs axi_bram_ctrl_0/S_AXI/Mem0] -force
+  assign_bd_address -offset 0xFFFFC000 -range 0x00004000 -target_address_space [get_bd_addr_spaces NsfrtuRv32_0/m_axi_data] [get_bd_addr_segs axi_bram_ctrl_2/S_AXI/Mem0] -force
+  assign_bd_address -offset 0x00010000 -range 0x00010000 -target_address_space [get_bd_addr_spaces NsfrtuRv32_0/m_axi_data] [get_bd_addr_segs axi_uartlite_0/S_AXI/Reg] -force
+  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces NsfrtuRv32_0/m_axi_instr] [get_bd_addr_segs axi_bram_ctrl_1/S_AXI/Mem0] -force
 
 
   # Restore current instance

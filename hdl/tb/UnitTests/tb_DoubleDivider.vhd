@@ -9,9 +9,9 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
 
 entity tb_DoubleDivider is
     generic (runner_cfg : string);
@@ -33,7 +33,7 @@ begin
     
     CreateClock(clk=>clk, period=>cPeriod);
 
-    eDut : entity ndsmd_riscv.DoubleDivider
+    eDut : entity nsfrtu_riscv.DoubleDivider
     port map (
         i_clk    => clk,
         i_resetn => resetn,

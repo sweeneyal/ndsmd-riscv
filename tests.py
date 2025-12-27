@@ -25,12 +25,12 @@ for file in files:
     simtools.add_source_file(file)
 
 # Create library 'lib'
-ndsmd = vu.add_library("ndsmd_riscv")
+nsfrtu = vu.add_library("nsfrtu_riscv")
 files = get_vhdl_files('./hdl/rtl', recursive=True)
 for file in files:
-    ndsmd.add_source_file(file)
+    nsfrtu.add_source_file(file)
 
-tb = vu.add_library("tb_ndsmd_riscv")
+tb = vu.add_library("tb_nsfrtu_riscv")
 files = get_vhdl_files('./hdl/tb', recursive=True)
 for file in files:
     tb.add_source_file(file)

@@ -4,8 +4,8 @@ library ieee;
 
 use std.textio.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
     
 entity SimpleRom is
     generic (

@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: tb_InstrPrefetcher
 --
--- library: tb_ndsmd_riscv
+-- library: tb_nsfrtu_riscv
 -- 
 -- generics:
 --      runner_cfg : configuration string for Vunit
@@ -16,10 +16,10 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
+library nsfrtu_riscv;
 
-library tb_ndsmd_riscv;
-    use tb_ndsmd_riscv.ProcessorCore_Utility.all;
+library tb_nsfrtu_riscv;
+    use tb_nsfrtu_riscv.ProcessorCore_Utility.all;
 
 entity tb_ProcessorCore is
     generic (runner_cfg : string);
@@ -61,7 +61,7 @@ architecture tb of tb_ProcessorCore is
     signal data_rready : std_logic;
 begin
     
-    eStimuli : entity tb_ndsmd_riscv.ProcessorCore_Stimuli
+    eStimuli : entity tb_nsfrtu_riscv.ProcessorCore_Stimuli
     generic map (
         nested_runner_cfg => runner_cfg
     ) port map (
@@ -69,7 +69,7 @@ begin
         i_responses => responses
     );
 
-    eDut : entity ndsmd_riscv.ProcessorCore
+    eDut : entity nsfrtu_riscv.ProcessorCore
     generic map (
         cPrefetch_PcMisalignmentSeverity => warning,
         cProcessor_CachelineSize_B      => 4,
@@ -113,7 +113,7 @@ begin
         o_data_rready => data_rready
     );
 
-    eRam : entity tb_ndsmd_riscv.RandomAxiRam
+    eRam : entity tb_nsfrtu_riscv.RandomAxiRam
     generic map (
         cAddressWidth_b  => cMemoryUnit_AddressWidth_b,
         cCachelineSize_B => cMemoryUnit_CachelineSize_B,

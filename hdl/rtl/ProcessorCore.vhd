@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------------------------------------------------
 -- entity: ControlEngine
 --
--- library: ndsmd_riscv
+-- library: nsfrtu_riscv
 -- 
 -- signals:
 --      i_clk    : system clock frequency
@@ -27,10 +27,10 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
-    use ndsmd_riscv.DatapathUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
+    use nsfrtu_riscv.DatapathUtility.all;
 
 entity ProcessorCore is
     generic (
@@ -172,7 +172,7 @@ architecture rtl of ProcessorCore is
     signal issued : stage_status_t;
 begin
     
-    ePrefetcher : entity ndsmd_riscv.InstrPrefetcher
+    ePrefetcher : entity nsfrtu_riscv.InstrPrefetcher
     generic map (
         cCachelineSize_B => cProcessor_CachelineSize_B,
 
@@ -207,7 +207,7 @@ begin
         i_pcwen => pcwen
     );
 
-    eControl : entity ndsmd_riscv.ControlEngine
+    eControl : entity nsfrtu_riscv.ControlEngine
     port map (
         i_clk    => i_clk,
         i_resetn => i_resetn,
@@ -222,7 +222,7 @@ begin
         i_pcwen  => pcwen
     );
 
-    eDatapath : entity ndsmd_riscv.Datapath
+    eDatapath : entity nsfrtu_riscv.Datapath
     generic map (
         cProcessor_CachelineSize_B => cProcessor_CachelineSize_B,
         cL1dCache_Enabled       => cL1dCache_Enabled,

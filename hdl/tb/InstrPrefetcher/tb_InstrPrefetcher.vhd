@@ -9,9 +9,9 @@ library osvvm;
     use osvvm.TbUtilPkg.all;
     use osvvm.RandomPkg.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
 
 library simtools;
 
@@ -111,7 +111,7 @@ begin
     CreateClock(clk=>clk, period=>cPeriod);
     stimuli.clk <= clk;
 
-    eDut : entity ndsmd_riscv.InstrPrefetcher
+    eDut : entity nsfrtu_riscv.InstrPrefetcher
     generic map (
         cCachelineSize_B   => tb_cfg.linesize_B,
         cGenerateCache     => tb_cfg.enabled,

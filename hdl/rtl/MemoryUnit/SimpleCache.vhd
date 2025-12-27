@@ -4,8 +4,8 @@ library ieee;
 
 use std.textio.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
     
 entity SimpleCache is
     generic (
@@ -48,7 +48,7 @@ begin
     
     gDirectMapped: if str_eq(cCacheType, "Direct") generate
 
-        eCache : entity ndsmd_riscv.CacheDirectMapped
+        eCache : entity nsfrtu_riscv.CacheDirectMapped
         generic map (
             cAddressWidth_b    => cAddressWidth_b,
             cCachelineSize_B   => cCachelineSize_B,
@@ -82,7 +82,7 @@ begin
 
     gDirectPiped: if str_eq(cCacheType, "DirectPiped") generate
 
-        eCache : entity ndsmd_riscv.CachePipedDirectMapped
+        eCache : entity nsfrtu_riscv.CachePipedDirectMapped
         generic map (
             cAddressWidth_b    => cAddressWidth_b,
             cCachelineSize_B   => cCachelineSize_B,

@@ -2,10 +2,10 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
-library ndsmd_riscv;
-    use ndsmd_riscv.CommonUtility.all;
-    use ndsmd_riscv.InstructionUtility.all;
-    use ndsmd_riscv.FpUtility.all;
+library nsfrtu_riscv;
+    use nsfrtu_riscv.CommonUtility.all;
+    use nsfrtu_riscv.InstructionUtility.all;
+    use nsfrtu_riscv.FpUtility.all;
 
 entity DoubleDivider is
     port (
@@ -38,7 +38,7 @@ architecture rtl of DoubleDivider is
     signal state : state_t := IDLE;
 begin
     
-    eDivider : entity ndsmd_riscv.DivisionUnit
+    eDivider : entity nsfrtu_riscv.DivisionUnit
     generic map (
         cDataWidth_b => 56,
         cIsIntegerDivision => false
